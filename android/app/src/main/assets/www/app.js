@@ -391,36 +391,124 @@
    *  模拟考试
    * ============================================================ */
   var ExamSetup = {
+    paper: 'std',        // 'std' 标准卷 | 'custom' 自定义卷
     count: 50,
-    minutes: 45,
+    minutes: 90,
     scope: 'all',
+
+    /* 标准卷构成依据《车工国家职业技能标准（2018年版）》对应的中级理论卷结构：
+       单项选择 第1~80题 + 判断 第81~100题，每题1分，满分100分，60分及格。
+       国标另规定理论知识考试时间不少于 90 分钟。 */
+    STD: { single: 80, judge: 20, minutes: 90 },
 
     init: function () {
       var self = this;
-      [['set-count', 'count'], ['set-time', 'minutes'], ['set-scope', 'scope']].forEach(function (p) {
-        var box = $(p[0]);
+      this.setChip = function (id, v) {
+        var box = $(id);
+        if (!box) return;
+        box.querySelectorAll('.chip').forEach(function (c) {
+          c.classList.toggle('on', c.dataset.v === String(v));
+        });
+      };
+
+      var bind = function (id, key, isNum) {
+        var box = $(id);
+        if (!box) return;
         box.addEventListener('click', function (e) {
           var b = e.target.closest('.chip');
           if (!b) return;
           box.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('on'); });
           b.classList.add('on');
-          self[p[1]] = p[0] === 'set-scope' ? b.dataset.v : +b.dataset.v;
+          self[key] = isNum ? +b.dataset.v : b.dataset.v;
+          if (key === 'paper') self.onPaperChange();
+          self.render();
         });
-      });
+      };
+      bind('set-paper', 'paper', false);
+      bind('set-count', 'count', true);
+      bind('set-time', 'minutes', true);
+      bind('set-scope', 'scope', false);
+
+      this.render();
+    },
+
+    /* 切换试卷类型时，时长跟着回到该类型的常用值 */
+    onPaperChange: function () {
+      if (this.paper === 'std') {
+        this.minutes = this.STD.minutes;
+        this.setChip('set-time', this.STD.minutes);
+      } else {
+        this.minutes = 45;
+        this.setChip('set-time', 45);
+      }
+    },
+
+    /* 预览卡片：说清这张卷子多少题、怎么配分 */
+    render: function () {
+      var std = this.paper === 'std';
+      var rowC = $('row-count'), rowS = $('row-scope');
+      if (rowC) rowC.style.display = std ? 'none' : '';
+      if (rowS) rowS.style.display = std ? 'none' : '';
+
+      var box = $('paper-preview');
+      if (!box) return;
+
+      if (std) {
+        var S = this.STD;
+        box.innerHTML =
+          '<div style="font-size:14px;font-weight:600;margin-bottom:10px">标准卷构成</div>' +
+          '<div class="kv-grid" style="margin-bottom:12px">' +
+            '<div><b>' + S.single + '</b><span>单项选择题</span></div>' +
+            '<div><b>' + S.judge + '</b><span>判断题</span></div>' +
+            '<div><b>' + (S.single + S.judge) + '</b><span>合计题数</span></div>' +
+          '</div>' +
+          '<div style="font-size:12.8px;color:var(--text-2);line-height:1.7">' +
+            '按真实试卷结构出卷：单选第 1~' + S.single + ' 题、判断第 ' + (S.single + 1) +
+            '~' + (S.single + S.judge) + ' 题，每题 1 分，满分 100 分。<br>' +
+            '建议时长 ' + S.minutes + ' 分钟（国家职业技能标准要求理论考试不少于 90 分钟）。' +
+          '</div>';
+      } else {
+        var scopeTxt = this.scope === 'single' ? '仅选择题'
+                     : (this.scope === 'judge' ? '仅判断题' : '全部题目');
+        box.innerHTML =
+          '<div style="font-size:14px;font-weight:600;margin-bottom:10px">自定义卷构成</div>' +
+          '<div style="font-size:12.8px;color:var(--text-2);line-height:1.7">' +
+            '从「' + scopeTxt + '」中随机抽取 <b style="color:var(--text)">' + this.count +
+            '</b> 题，满分 100 分，每题约 ' + (100 / this.count).toFixed(1) + ' 分。<br>' +
+            '适合日常练手，题量与真实试卷不同。' +
+          '</div>';
+      }
     },
 
     start: function () {
-      var pool = DB.questions.filter(function (q) {
-        if (this.scope === 'single') return q.type === 'single';
-        if (this.scope === 'judge') return q.type === 'judge';
-        return true;
-      }, this);
-      if (pool.length < this.count) {
-        Toast.show('该范围只有 ' + pool.length + ' 题，已按实际题量出卷');
+      var picked, kind;
+      if (this.paper === 'std') {
+        var S = this.STD;
+        var singles = [], judges = [];
+        DB.questions.forEach(function (q) {
+          if (q.type === 'single') singles.push(q.id);
+          else if (q.type === 'judge') judges.push(q.id);
+        });
+        var ns = Math.min(S.single, singles.length);
+        var nj = Math.min(S.judge, judges.length);
+        if (ns < S.single || nj < S.judge) Toast.show('题库题量不足，已按实际题量出卷');
+        // 保持与真实试卷一致的分段顺序：先单选，后判断
+        picked = shuffle(singles).slice(0, ns).concat(shuffle(judges).slice(0, nj));
+        kind = '标准卷';
+      } else {
+        var pool = DB.questions.filter(function (q) {
+          if (this.scope === 'single') return q.type === 'single';
+          if (this.scope === 'judge') return q.type === 'judge';
+          return true;
+        }, this);
+        if (pool.length < this.count) {
+          Toast.show('该范围只有 ' + pool.length + ' 题，已按实际题量出卷');
+        }
+        picked = shuffle(pool.map(function (q) { return q.id; }))
+                    .slice(0, Math.min(this.count, pool.length));
+        kind = '自定义卷';
       }
-      var n = Math.min(this.count, pool.length);
-      var picked = shuffle(pool.map(function (q) { return q.id; })).slice(0, n);
-      Exam.begin(picked, this.minutes * 60);
+      Exam.begin(picked, this.minutes * 60, kind);
     },
 
     renderHistory: function () {
@@ -454,9 +542,11 @@
     timer: null,
     startedAt: 0,
     total: 0,
+    kind: '模拟考试',
 
-    begin: function (ids, seconds) {
+    begin: function (ids, seconds, kind) {
       var self = this;
+      this.kind = kind || '模拟考试';
       this.paper = ids.map(function (id) {
         var q = BY_ID[id];
         // 选择题打乱选项；判断题的"正确/错误"保持原序
@@ -482,6 +572,7 @@
       clearInterval(this.timer);
       this.timer = setInterval(function () { self.tick(); }, 1000);
       $('e-sub').textContent = '1 / ' + this.total;
+      $('e-kind').textContent = this.kind;
       Nav.goto('exam');
       this.render();
       this.tick();
@@ -586,7 +677,8 @@
 
       var rec = {
         date: fmtDate(new Date()),
-        total: this.total, ok: ok, bad: bad, score: score, used: used
+        total: this.total, ok: ok, bad: bad, score: score, used: used,
+        kind: this.kind
       };
       Store.data.exams.unshift(rec);
       Store.data.exams = Store.data.exams.slice(0, 30);
@@ -621,9 +713,12 @@
         '</div>';
 
       html += '<div class="card" style="margin-top:14px;font-size:13.5px;color:var(--text-2);line-height:1.9">' +
+        (rec.kind ? '<b style="color:var(--text)">' + esc(rec.kind) + '</b>，' : '') +
         '本次共 ' + rec.total + ' 题，正确率 <b style="color:var(--text)">' + rec.score + '%</b>，' +
         '平均每题 ' + avg + ' 秒' + (blank ? '，其中 ' + blank + ' 题未作答' : '') + '。<br>' +
-        '按考证标准，60 分为及格线。' +
+        '按《车工国家职业技能标准（2018 年版）》，理论知识考试实行百分制，' +
+        '<b style="color:var(--text)">60 分（含）以上合格</b>；' +
+        '且理论与技能操作须<b style="color:var(--text)">各自</b>达到 60 分才算整体合格。' +
       '</div>';
 
       html += '<div style="height:18px"></div>';

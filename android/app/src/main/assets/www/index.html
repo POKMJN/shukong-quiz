@@ -53,7 +53,7 @@
           <button class="mode" onclick="Home.goto('exam-setup')">
             <span class="mi green">⏱️</span>
             <b>模拟考试</b>
-            <span>限时抽题作答，交卷后自动评分</span>
+            <span>标准卷（单选80+判断20）或自定义卷，限时评分</span>
           </button>
           <button class="mode" onclick="Home.goto('wrong')">
             <span class="mi red">📕</span>
@@ -116,6 +116,13 @@
     <div class="scroll"><div class="wrap" style="padding-top:16px">
       <div class="card">
         <div class="setup-row">
+          <span>试卷类型</span>
+          <div class="chips" id="set-paper">
+            <button class="chip on" data-v="std">标准卷</button>
+            <button class="chip" data-v="custom">自定义</button>
+          </div>
+        </div>
+        <div class="setup-row" id="row-count">
           <span>试卷题量</span>
           <div class="chips" id="set-count">
             <button class="chip" data-v="30">30 题</button>
@@ -123,15 +130,7 @@
             <button class="chip" data-v="100">100 题</button>
           </div>
         </div>
-        <div class="setup-row">
-          <span>考试时长</span>
-          <div class="chips" id="set-time">
-            <button class="chip" data-v="30">30 分钟</button>
-            <button class="chip on" data-v="45">45 分钟</button>
-            <button class="chip" data-v="60">60 分钟</button>
-          </div>
-        </div>
-        <div class="setup-row">
+        <div class="setup-row" id="row-scope">
           <span>抽题范围</span>
           <div class="chips" id="set-scope">
             <button class="chip on" data-v="all">全部题目</button>
@@ -139,13 +138,23 @@
             <button class="chip" data-v="judge">仅判断题</button>
           </div>
         </div>
+        <div class="setup-row">
+          <span>考试时长</span>
+          <div class="chips" id="set-time">
+            <button class="chip" data-v="45">45 分钟</button>
+            <button class="chip" data-v="60">60 分钟</button>
+            <button class="chip on" data-v="90">90 分钟</button>
+          </div>
+        </div>
       </div>
+
+      <div class="card" style="margin-top:14px" id="paper-preview"></div>
 
       <div class="card" style="margin-top:14px;font-size:13px;color:var(--text-2);line-height:1.75">
         <b style="color:var(--text)">考试说明</b><br>
-        · 按规定题量从题库随机抽取，选项顺序随机打乱<br>
         · 考试过程中不显示答案，交卷后统一评分<br>
-        · 满分 100 分，60 分及格<br>
+        · 选择题选项顺序随机打乱，每次卷子都不同<br>
+        · 满分 100 分，60 分及格（理论与实操须各自合格）<br>
         · 时间耗尽将自动交卷
       </div>
 
@@ -165,7 +174,7 @@
       <button class="icon-btn" onclick="Exam.confirmQuit()">✕</button>
       <div class="nav-title">
         <span>模拟考试</span>
-        <small id="e-sub">1 / 50</small>
+        <small><span id="e-kind">标准卷</span> · <span id="e-sub">1 / 100</span></small>
       </div>
       <div class="exam-timer" id="e-timer">--:--</div>
     </div>
