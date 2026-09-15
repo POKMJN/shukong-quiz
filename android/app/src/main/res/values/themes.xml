@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Quiz" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/brand</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorPrimaryDark">@color/brand</item>
+        <item name="colorAccent">@color/brand</item>
+    </style>
+</resources>

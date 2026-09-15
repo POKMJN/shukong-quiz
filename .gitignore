@@ -1,0 +1,27 @@
+# ---- Android 构建产物 ----
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/captures/
+
+# ---- 安装包不入库（请在 Releases 页下载，或自行构建）----
+*.apk
+*.aab
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
+
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- 题库源文档（版权归原出版方，不入库）----
+source/

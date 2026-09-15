@@ -1,0 +1,50 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.quiz.shukong'
+    compileSdk 32
+
+    defaultConfig {
+        applicationId "com.quiz.shukong"
+        minSdk 21
+        targetSdk 32
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // 仓库里带的 quiz.keystore 是自签名测试用证书，口令就写在下面（不是机密）。
+    // 保留它是为了让 Release 包能覆盖安装（签名一致）；没有这个文件时自动回退为不签名，
+    // 方便他人 fork 后直接构建。
+    def ks = rootProject.file('quiz.keystore')
+    signingConfigs {
+        release {
+            if (ks.exists()) {
+                storeFile ks
+                storePassword 'quiz123456'
+                keyAlias 'quiz'
+                keyPassword 'quiz123456'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ks.exists()) signingConfig signingConfigs.release
+        }
+        debug {
+            if (ks.exists()) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // 这些版本都兼容 compileSdk 32；1.6.x 起要求 compileSdk 33
+    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation 'androidx.webkit:webkit:1.4.0'
+}

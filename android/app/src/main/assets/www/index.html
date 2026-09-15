@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<title>数控车工考证刷题</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:14px;opacity:.9">正在加载题库…</div>
+</div>
+
+<div id="app">
+
+  <!-- ============ 首页 ============ -->
+  <section id="screen-home" class="screen active">
+    <div class="scroll">
+      <div class="hero">
+        <h1 id="home-title">数控车工（中级）考证</h1>
+        <p>理论知识题库 · 顺序练习 / 随机练习 / 模拟考试</p>
+        <div class="stat-row">
+          <div class="stat"><b id="st-total">0</b><span>题库总题数</span></div>
+          <div class="stat"><b id="st-done">0%</b><span>练习进度</span></div>
+          <div class="stat"><b id="st-rate">—</b><span>正确率</span></div>
+        </div>
+      </div>
+
+      <div class="wrap pull-up">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+            <span style="font-size:14px;font-weight:600">学习进度</span>
+            <span style="font-size:12.5px;color:var(--text-3)" id="prog-txt">已练习 0 / 0 题</span>
+          </div>
+          <div class="bar"><i id="prog-bar" style="width:0%"></i></div>
+        </div>
+
+        <div class="section-title">开始练习</div>
+        <div class="modes">
+          <button class="mode" onclick="Home.startPractice('order')">
+            <span class="mi blue">📖</span>
+            <b>基础练习</b>
+            <span>按题库顺序逐题作答，答后即时讲解</span>
+          </button>
+          <button class="mode" onclick="Home.startPractice('random')">
+            <span class="mi violet">🔀</span>
+            <b>随机练习</b>
+            <span>打乱题目顺序，检验真实掌握程度</span>
+          </button>
+          <button class="mode" onclick="Home.goto('exam-setup')">
+            <span class="mi green">⏱️</span>
+            <b>模拟考试</b>
+            <span>限时抽题作答，交卷后自动评分</span>
+          </button>
+          <button class="mode" onclick="Home.goto('wrong')">
+            <span class="mi red">📕</span>
+            <b>错题本</b>
+            <span id="wrong-sub">集中攻克做错的题目</span>
+          </button>
+          <button class="mode" onclick="Home.goto('fav')">
+            <span class="mi orange">⭐</span>
+            <b>我的收藏</b>
+            <span id="fav-sub">标记重点题目随时复看</span>
+          </button>
+          <button class="mode" onclick="Home.goto('stats')">
+            <span class="mi teal">📊</span>
+            <b>答题统计</b>
+            <span>练习记录与分类掌握情况</span>
+          </button>
+        </div>
+
+        <div class="section-title">按分类练习</div>
+        <div class="card" id="cat-list" style="padding:4px 16px"></div>
+
+        <div style="height:28px"></div>
+        <div class="card" style="text-align:center;padding:14px">
+          <button class="btn" style="background:#fff;color:var(--text-2)" onclick="Home.confirmReset()">
+            清空所有练习记录
+          </button>
+        </div>
+        <div style="text-align:center;font-size:11.5px;color:var(--text-3);padding:16px 0 26px">
+          题库共 <span id="foot-total">0</span> 题 · 数据来源：数控车工中级考证理论题
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 练习 ============ -->
+  <section id="screen-practice" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Practice.exit()">←</button>
+      <div class="nav-title">
+        <span id="p-title">基础练习</span>
+        <small id="p-sub">1 / 1</small>
+      </div>
+      <button class="icon-btn" onclick="Practice.openCard()">☰</button>
+    </div>
+    <div class="scroll"><div class="wrap" id="p-body"></div></div>
+    <div class="footbar">
+      <button class="btn" id="p-prev" onclick="Practice.step(-1)">上一题</button>
+      <button class="btn sm" id="p-fav" onclick="Practice.toggleFav()">☆</button>
+      <button class="btn primary" id="p-next" onclick="Practice.step(1)">下一题</button>
+    </div>
+  </section>
+
+  <!-- ============ 模拟考试设置 ============ -->
+  <section id="screen-exam-setup" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Home.goto('home')">←</button>
+      <div class="nav-title">模拟考试</div>
+      <button class="icon-btn ghost">·</button>
+    </div>
+    <div class="scroll"><div class="wrap" style="padding-top:16px">
+      <div class="card">
+        <div class="setup-row">
+          <span>试卷题量</span>
+          <div class="chips" id="set-count">
+            <button class="chip" data-v="30">30 题</button>
+            <button class="chip on" data-v="50">50 题</button>
+            <button class="chip" data-v="100">100 题</button>
+          </div>
+        </div>
+        <div class="setup-row">
+          <span>考试时长</span>
+          <div class="chips" id="set-time">
+            <button class="chip" data-v="30">30 分钟</button>
+            <button class="chip on" data-v="45">45 分钟</button>
+            <button class="chip" data-v="60">60 分钟</button>
+          </div>
+        </div>
+        <div class="setup-row">
+          <span>抽题范围</span>
+          <div class="chips" id="set-scope">
+            <button class="chip on" data-v="all">全部题目</button>
+            <button class="chip" data-v="single">仅选择题</button>
+            <button class="chip" data-v="judge">仅判断题</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;font-size:13px;color:var(--text-2);line-height:1.75">
+        <b style="color:var(--text)">考试说明</b><br>
+        · 按规定题量从题库随机抽取，选项顺序随机打乱<br>
+        · 考试过程中不显示答案，交卷后统一评分<br>
+        · 满分 100 分，60 分及格<br>
+        · 时间耗尽将自动交卷
+      </div>
+
+      <div style="height:18px"></div>
+      <button class="btn primary" style="height:50px;font-size:16.5px" onclick="ExamSetup.start()">
+        开始考试
+      </button>
+
+      <div id="exam-history" style="margin-top:26px"></div>
+      <div style="height:30px"></div>
+    </div></div>
+  </section>
+
+  <!-- ============ 考试中 ============ -->
+  <section id="screen-exam" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Exam.confirmQuit()">✕</button>
+      <div class="nav-title">
+        <span>模拟考试</span>
+        <small id="e-sub">1 / 50</small>
+      </div>
+      <div class="exam-timer" id="e-timer">--:--</div>
+    </div>
+    <div class="scroll"><div class="wrap" id="e-body"></div></div>
+    <div class="footbar">
+      <button class="btn sm" onclick="Exam.openCard()">☰</button>
+      <button class="btn" id="e-prev" onclick="Exam.step(-1)">上一题</button>
+      <button class="btn primary" id="e-next" onclick="Exam.step(1)">下一题</button>
+    </div>
+  </section>
+
+  <!-- ============ 成绩 ============ -->
+  <section id="screen-result" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Home.goto('home')">←</button>
+      <div class="nav-title">考试成绩</div>
+      <button class="icon-btn ghost">·</button>
+    </div>
+    <div class="scroll"><div id="r-body"></div></div>
+  </section>
+
+  <!-- ============ 错题本 / 收藏 ============ -->
+  <section id="screen-list" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Home.goto('home')">←</button>
+      <div class="nav-title" id="l-title">错题本</div>
+      <button class="icon-btn" id="l-action" onclick="List.doAction()">▶</button>
+    </div>
+    <div class="scroll"><div class="wrap" id="l-body" style="padding-top:14px"></div></div>
+  </section>
+
+  <!-- ============ 统计 ============ -->
+  <section id="screen-stats" class="screen">
+    <div class="navbar">
+      <button class="icon-btn" onclick="Home.goto('home')">←</button>
+      <div class="nav-title">答题统计</div>
+      <button class="icon-btn ghost">·</button>
+    </div>
+    <div class="scroll"><div class="wrap" id="s-body" style="padding-top:16px"></div></div>
+  </section>
+
+</div>
+
+<!-- 答题卡 -->
+<div class="drawer-mask" id="card-mask" onclick="Cards.close()"></div>
+<div class="drawer" id="card-drawer">
+  <div class="dh">
+    <b>答题卡</b>
+    <button class="close" onclick="Cards.close()">✕</button>
+  </div>
+  <div class="db">
+    <div class="legend">
+      <span><i style="background:var(--brand-light)"></i>当前</span>
+      <span><i style="background:var(--ok-bg)"></i>答对</span>
+      <span><i style="background:var(--err-bg)"></i>答错</span>
+      <span><i style="background:#f2f5fa"></i>未作答</span>
+    </div>
+    <div class="grid-card" id="card-grid"></div>
+  </div>
+</div>
+
+<!-- 通用弹窗 -->
+<div class="modal-mask" id="modal-mask">
+  <div class="modal">
+    <h3 id="modal-title">提示</h3>
+    <p id="modal-text"></p>
+    <div class="acts">
+      <button class="btn" id="modal-cancel">取消</button>
+      <button class="btn primary" id="modal-ok">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="qbank.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
