@@ -259,6 +259,7 @@
     title: '',
     mode: 'order',
     fromCat: false,
+    _slideDir: null,
 
     begin: function (ids, title, mode, fromCat) {
       this.ids = ids;
@@ -266,6 +267,7 @@
       this.title = title;
       this.mode = mode;
       this.fromCat = !!fromCat;
+      this._slideDir = null;
       $('p-title').textContent = title;
       Nav.goto('practice');
       this.render();
@@ -331,7 +333,15 @@
           '</div>';
       }
 
-      $('p-body').innerHTML = html;
+      var pBody = $('p-body');
+      pBody.innerHTML = html;
+      if (this._slideDir) {
+        var animCls = this._slideDir === 'right' ? 'slide-in-right' : 'slide-in-left';
+        pBody.classList.remove('slide-in-right', 'slide-in-left');
+        void pBody.offsetWidth;
+        pBody.classList.add(animCls);
+        this._slideDir = null;
+      }
       document.querySelector('#screen-practice .scroll').scrollTop = 0;
     },
 
@@ -342,9 +352,12 @@
       this.render();
     },
 
-    step: function (d) {
+    step: function (d, isSwipe) {
       var n = this.idx + d;
-      if (n < 0) return;
+      if (n < 0) {
+        if (isSwipe) Toast.show('已经是第一题了');
+        return;
+      }
       if (n >= this.ids.length) {
         var c = Store.counts();
         Modal.ask('本组练习完成',
@@ -353,6 +366,7 @@
           '返回首页', function () { Home.goto('home'); });
         return;
       }
+      this._slideDir = d > 0 ? 'right' : 'left';
       this.idx = n;
       this.render();
     },
@@ -381,6 +395,7 @@
     },
 
     jump: function (i) {
+      this._slideDir = null;
       this.idx = i;
       Cards.close();
       this.render();
@@ -543,10 +558,12 @@
     startedAt: 0,
     total: 0,
     kind: '模拟考试',
+    _slideDir: null,
 
     begin: function (ids, seconds, kind) {
       var self = this;
       this.kind = kind || '模拟考试';
+      this._slideDir = null;
       this.paper = ids.map(function (id) {
         var q = BY_ID[id];
         // 选择题打乱选项；判断题的"正确/错误"保持原序
@@ -614,7 +631,16 @@
           '<span class="key">' + key + '</span><span class="txt">' + esc(text) + '</span></button>';
       });
       html += '</div>';
-      $('e-body').innerHTML = html;
+
+      var eBody = $('e-body');
+      eBody.innerHTML = html;
+      if (this._slideDir) {
+        var animCls = this._slideDir === 'right' ? 'slide-in-right' : 'slide-in-left';
+        eBody.classList.remove('slide-in-right', 'slide-in-left');
+        void eBody.offsetWidth;
+        eBody.classList.add(animCls);
+        this._slideDir = null;
+      }
       document.querySelector('#screen-exam .scroll').scrollTop = 0;
     },
 
@@ -623,10 +649,14 @@
       this.render();
     },
 
-    step: function (d) {
+    step: function (d, isSwipe) {
       var n = this.idx + d;
-      if (n < 0) return;
+      if (n < 0) {
+        if (isSwipe) Toast.show('已经是第一题了');
+        return;
+      }
       if (n >= this.total) { this.confirmSubmit(); return; }
+      this._slideDir = d > 0 ? 'right' : 'left';
       this.idx = n;
       this.render();
     },
@@ -643,7 +673,12 @@
       });
     },
 
-    jump: function (i) { this.idx = i; Cards.close(); this.render(); },
+    jump: function (i) {
+      this._slideDir = null;
+      this.idx = i;
+      Cards.close();
+      this.render();
+    },
 
     confirmQuit: function () {
       var self = this;
@@ -883,6 +918,251 @@
   };
 
   /* ============================================================
+   *  左右滑动切题手势绑定（支持触屏滑动与 PC 鼠标拖拽）
+   * ============================================================ */
+  function bindSwipeNavigation(containerEl, onNext, onPrev) {
+    if (!containerEl) return;
+    var startX = 0, startY = 0, startTime = 0;
+    var isSwiping = false;
+
+    function handleStart(cx, cy) {
+      if ($('card-drawer').classList.contains('open') ||
+          $('card-mask').classList.contains('open') ||
+          $('modal-mask').classList.contains('open')) {
+        isSwiping = false;
+        return;
+      }
+      startX = cx;
+      startY = cy;
+      startTime = Date.now();
+      isSwiping = true;
+    }
+
+    function handleMove(cx, cy) {
+      if (!isSwiping) return;
+      var dx = cx - startX;
+      var dy = cy - startY;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+        isSwiping = false;
+      }
+    }
+
+    function handleEnd(cx, cy) {
+      if (!isSwiping) return;
+      isSwiping = false;
+      var dt = Date.now() - startTime;
+      if (dt > 800) return;
+      var dx = cx - startX;
+      var dy = cy - startY;
+      var absX = Math.abs(dx);
+      var absY = Math.abs(dy);
+      if (absX >= 45 && absX > absY * 1.3) {
+        if (dx < 0) {
+          if (onNext) onNext();
+        } else {
+          if (onPrev) onPrev();
+        }
+      }
+    }
+
+    // 触控事件 (移动设备)
+    containerEl.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+
+    containerEl.addEventListener('touchmove', function (e) {
+      if (!isSwiping || e.touches.length !== 1) return;
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+
+    containerEl.addEventListener('touchend', function (e) {
+      if (!e.changedTouches || !e.changedTouches.length) return;
+      handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    }, { passive: true });
+
+    // 鼠标事件 (桌面浏览器预览友好，按住左键左右拖动即可切题)
+    containerEl.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      handleStart(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mousemove', function (e) {
+      if (!isSwiping) return;
+      handleMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mouseup', function (e) {
+      if (!isSwiping) return;
+      handleEnd(e.clientX, e.clientY);
+    });
+  }
+
+  /* ============================================================
+   *  每日密码 / 云端控制 (AccessControl)
+   * ============================================================ */
+  var AccessControl = {
+    cfg: null,
+    today: function () {
+      var d = new Date();
+      var m = String(d.getMonth() + 1);
+      if (m.length < 2) m = '0' + m;
+      var day = String(d.getDate());
+      if (day.length < 2) day = '0' + day;
+      return d.getFullYear() + '-' + m + '-' + day;
+    },
+    fetchConfig: function (cb) {
+      var urls = [
+        'https://cdn.jsdelivr.net/gh/POKMJN/shukong-quiz@main/access_control.json?t=' + Date.now(),
+        'https://raw.githubusercontent.com/POKMJN/shukong-quiz/main/access_control.json?t=' + Date.now(),
+        'access_control.json?t=' + Date.now()
+      ];
+      var idx = 0;
+      var done = false;
+      function tryNext() {
+        if (done) return;
+        if (idx >= urls.length) {
+          done = true;
+          var cached = null;
+          try { cached = JSON.parse(localStorage.getItem('skq_access_cfg') || 'null'); } catch (e) {}
+          cb(cached || { enabled: false });
+          return;
+        }
+        var url = urls[idx++];
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.timeout = 2500;
+        xhr.onload = function () {
+          if (done) return;
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              var data = JSON.parse(xhr.responseText);
+              done = true;
+              try { localStorage.setItem('skq_access_cfg', JSON.stringify(data)); } catch (e) {}
+              cb(data);
+            } catch (e) {
+              tryNext();
+            }
+          } else {
+            tryNext();
+          }
+        };
+        xhr.onerror = function () { if (!done) tryNext(); };
+        xhr.ontimeout = function () { if (!done) tryNext(); };
+        try { xhr.send(); } catch (e) { tryNext(); }
+      }
+      tryNext();
+    },
+    init: function (onReady) {
+      var self = this;
+      var todayStr = self.today();
+      var lockEl = $('lock-screen');
+      var cardEl = $('lock-card');
+      var inputEl = $('lock-input');
+      var btnEl = $('lock-btn');
+      var toggleBtn = $('lock-toggle-pwd');
+      var noticeEl = $('lock-notice');
+      var statusEl = $('lock-status');
+
+      if (!lockEl) {
+        if (onReady) onReady();
+        return;
+      }
+
+      if (toggleBtn && inputEl) {
+        toggleBtn.onclick = function () {
+          if (inputEl.type === 'password') {
+            inputEl.type = 'text';
+            toggleBtn.textContent = '🔒';
+          } else {
+            inputEl.type = 'password';
+            toggleBtn.textContent = '👁️';
+          }
+        };
+      }
+
+      self.fetchConfig(function (cfg) {
+        self.cfg = cfg || {};
+        var isEnabled = !!self.cfg.enabled;
+        var requiredPwd = String(self.cfg.password || '').trim();
+        var noticeText = self.cfg.notice || '今日学习密码请向指导老师获取';
+
+        if (noticeEl) noticeEl.textContent = noticeText;
+
+        if (!isEnabled || !requiredPwd) {
+          lockEl.style.display = 'none';
+          if (onReady) onReady();
+          return;
+        }
+
+        var lastUnlockedDate = localStorage.getItem('skq_unlocked_date');
+        var lastUnlockedPwd = localStorage.getItem('skq_unlocked_pwd');
+        if (lastUnlockedDate === todayStr && lastUnlockedPwd === requiredPwd) {
+          lockEl.style.display = 'none';
+          if (onReady) onReady();
+          return;
+        }
+
+        // 需要输入密码
+        lockEl.style.display = 'flex';
+        var l = $('loading');
+        if (l) {
+          l.classList.add('hide');
+          setTimeout(function () { l.style.display = 'none'; }, 200);
+        }
+
+        function submit() {
+          var val = (inputEl.value || '').trim();
+          if (!val) {
+            statusEl.textContent = '请输入今日密码';
+            statusEl.className = 'lock-status';
+            shake();
+            return;
+          }
+          if (val === requiredPwd) {
+            statusEl.textContent = '验证成功，正在进入...';
+            statusEl.className = 'lock-status ok';
+            try {
+              localStorage.setItem('skq_unlocked_date', todayStr);
+              localStorage.setItem('skq_unlocked_pwd', requiredPwd);
+            } catch (e) {}
+            setTimeout(function () {
+              lockEl.classList.add('fade-out');
+              setTimeout(function () {
+                lockEl.style.display = 'none';
+                lockEl.classList.remove('fade-out');
+                if (onReady) onReady();
+              }, 300);
+            }, 250);
+          } else {
+            statusEl.textContent = '密码错误，请核对后重试';
+            statusEl.className = 'lock-status';
+            shake();
+            inputEl.value = '';
+            inputEl.focus();
+          }
+        }
+
+        function shake() {
+          if (cardEl) {
+            cardEl.classList.remove('shake');
+            void cardEl.offsetWidth;
+            cardEl.classList.add('shake');
+          }
+        }
+
+        if (btnEl) btnEl.onclick = submit;
+        if (inputEl) {
+          inputEl.onkeydown = function (e) {
+            if (e.key === 'Enter') submit();
+          };
+          setTimeout(function () { inputEl.focus(); }, 300);
+        }
+      });
+    }
+  };
+
+  /* ============================================================
    *  启动
    * ============================================================ */
   function boot() {
@@ -911,17 +1191,28 @@
     var navTitle = document.querySelector('#screen-exam .navbar');
     navTitle.addEventListener('dblclick', function () { Exam.openCard(); });
 
+    // 左右滑动手势绑定：练习页与考试页均支持滑动切题
+    bindSwipeNavigation($('screen-practice'),
+      function () { Practice.step(1, true); },
+      function () { Practice.step(-1, true); }
+    );
+    bindSwipeNavigation($('screen-exam'),
+      function () { Exam.step(1, true); },
+      function () { Exam.step(-1, true); }
+    );
+
     ExamSetup.init();
     Home.render();
-
-    // 恢复上次未完成的练习（同一次会话内）
     Nav.goto('home', true);
 
-    setTimeout(function () {
+    // 每日密码鉴权与加载动画隐藏
+    AccessControl.init(function () {
       var l = $('loading');
-      l.classList.add('hide');
-      setTimeout(function () { l.style.display = 'none'; }, 320);
-    }, 120);
+      if (l) {
+        l.classList.add('hide');
+        setTimeout(function () { l.style.display = 'none'; }, 320);
+      }
+    });
   }
 
   // 暴露给 HTML
@@ -935,9 +1226,16 @@
   window.Cards = Cards;
   window.Toast = Toast;
   window.Nav = Nav;
+  window.AccessControl = AccessControl;
 
   // Android 返回键支持
-  window.__onBackPressed = function () { return Nav.back(); };
+  window.__onBackPressed = function () {
+    var lockEl = $('lock-screen');
+    if (lockEl && lockEl.style.display !== 'none') {
+      return false;
+    }
+    return Nav.back();
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

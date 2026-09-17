@@ -8,8 +8,8 @@ android {
         applicationId "com.quiz.shukong"
         minSdk 21
         targetSdk 32
-        versionCode 2
-        versionName "1.1"
+        versionCode 3
+        versionName "1.2"
     }
 
     // 仓库里带的 quiz.keystore 是自签名测试用证书，口令就写在下面（不是机密）。

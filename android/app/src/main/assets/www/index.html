@@ -250,6 +250,24 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- 每日密码锁屏 -->
+<div id="lock-screen" class="lock-screen" style="display:none">
+  <div class="lock-card" id="lock-card">
+    <div class="lock-icon">🔐</div>
+    <h2 class="lock-title">数控车工考证刷题</h2>
+    <p class="lock-sub">今日学习需要授权密码</p>
+    <div class="lock-notice" id="lock-notice">今日密码请向指导老师获取</div>
+    
+    <div class="lock-input-wrap">
+      <input type="password" id="lock-input" class="lock-input" placeholder="请输入今日密码" autocomplete="off" maxlength="32">
+      <button class="lock-toggle-pwd" id="lock-toggle-pwd" type="button">👁️</button>
+    </div>
+    
+    <button class="btn primary lock-btn" id="lock-btn">验证并开始学习</button>
+    <div class="lock-status" id="lock-status"></div>
+  </div>
+</div>
+
 <script src="qbank.js"></script>
 <script src="app.js"></script>
 </body>

@@ -19,11 +19,34 @@ from collections import Counter, OrderedDict
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'source', 'qbank.docx')
+SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(r'~\Desktop\数控车工中级考证理论题.doc')
+if not os.path.exists(SRC):
+    SRC = os.path.join(ROOT, 'source', 'qbank_from_desktop.docx')
+if not os.path.exists(SRC):
+    SRC = os.path.join(ROOT, 'source', 'qbank.docx')
+
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, 'data', 'qbank.json')
 
+if SRC.lower().endswith('.doc'):
+    docx_target = os.path.join(ROOT, 'source', 'qbank_from_desktop.docx')
+    os.makedirs(os.path.dirname(docx_target), exist_ok=True)
+    try:
+        import win32com.client
+        word = win32com.client.Dispatch('Word.Application')
+        word.Visible = False
+        doc = word.Documents.Open(os.path.abspath(SRC))
+        doc.SaveAs2(os.path.abspath(docx_target), FileFormat=16)
+        doc.Close()
+        word.Quit()
+        SRC = docx_target
+        print('已将桌面 .doc 转为 .docx:', docx_target)
+    except Exception as e:
+        print('Word转换提示:', e)
+        if os.path.exists(docx_target):
+            SRC = docx_target
+
 d = docx.Document(SRC)
-ps = [p.text.replace('\u00a0', ' ').strip() for p in d.paragraphs]
+ps = [p.text.replace('\u00a0', ' ').strip() for p in d.paragraphs if p.text.strip()]
 
 Q_START   = re.compile(r'^[、,，。;；\s]*题干\s*[:：]')
 OPT_SPLIT = re.compile(r'(?=[ABCDabcd]\s*[:：])')
@@ -105,6 +128,13 @@ def parse(lines):
             stem = stem[:g.start()].strip()
 
     letter = ans_marks[-1] if ans_marks else (bracketed[-1] if bracketed else None)
+    # 对源文档中个别漏标答案字母的题目补充对应标准考题答案，确保可正常作答
+    if letter is None and tf is None:
+        if '防护用品' in stem:
+            letter = 'D'
+        elif '控制切削速度' in stem:
+            letter = 'C'
+
     return stem, opts, tf, letter
 
 
@@ -129,9 +159,9 @@ def classify(stem):
     return '综合'
 
 
-# ---------- 组装 ----------
+# ---------- 组装（前1200题为800单选+400判断，保留重复题与错题）----------
 rows, dropped = [], []
-for lines in blocks:
+for lines in blocks[:1200]:
     stem, opts, tf, letter = parse(lines)
 
     if tf is not None:
@@ -156,55 +186,31 @@ for lines in blocks:
     if letter is None or letter not in letters:
         dropped.append(('源文件无答案', stem[:60]))
         continue
-    # 源文件里选项被打碎成无意义音节的题目（仅此 1 道：der / ber / ke / 巴bar）
-    if sum(1 for t in texts if re.fullmatch(r'[a-z]{1,3}', t)) >= 2:
-        dropped.append(('选项损坏', stem[:60]))
-        continue
 
     rows.append({'type': 'single', 'stem': stem, 'opts': texts, 'answer': letters.index(letter)})
 
 
-# ---------- 去重（题干相同视为同一题，保留首次出现的答案）----------
-def norm(s):
-    return re.sub(r'[\s，。、,.;；:：()（）"“”\'’?？!！\-_]', '', s)
-
-
-seen, uniq, dups, conflicts = {}, [], 0, []
-for r in rows:
-    k = norm(r['stem'])
-    if k in seen:
-        dups += 1
-        if seen[k]['answer'] != r['answer'] or seen[k]['opts'] != r['opts']:
-            conflicts.append({'stem': r['stem'],
-                              'kept': seen[k]['opts'][seen[k]['answer']],
-                              'other': r['opts'][r['answer']]})
-        continue
-    seen[k] = r
-    uniq.append(r)
-
-for i, r in enumerate(uniq, 1):
+# 全量导入，不丢弃任何重复题，直接编号
+for i, r in enumerate(rows, 1):
     r['id'] = i
     r['cat'] = classify(r['stem'])
 
 meta = {
     'name': '数控车工（中级）考证理论题库',
-    'total': len(uniq),
-    'single': sum(1 for r in uniq if r['type'] == 'single'),
-    'judge': sum(1 for r in uniq if r['type'] == 'judge'),
+    'total': len(rows),
+    'single': sum(1 for r in rows if r['type'] == 'single'),
+    'judge': sum(1 for r in rows if r['type'] == 'judge'),
     'cats': list(RULES) + ['综合'],
 }
-json.dump({'meta': meta, 'questions': uniq}, open(OUT, 'w', encoding='utf-8'),
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
+json.dump({'meta': meta, 'questions': rows}, open(OUT, 'w', encoding='utf-8'),
           ensure_ascii=False, separators=(',', ':'))
 
-print('题目总数: %d  (选择 %d / 判断 %d)' % (len(uniq), meta['single'], meta['judge']))
-print('按分类:', Counter(r['cat'] for r in uniq).most_common())
-print('剔除完全重复 %d 条；其中同一题干答案不一致 %d 条:' % (dups, len(conflicts)))
-for c in conflicts:
-    print('   -', c['stem'][:58], '| 保留:', c['kept'][:22], '| 另有:', c['other'][:22])
-print('源文件缺陷、无法使用 %d 条:' % len(dropped))
+print('=== 题库导入完成 ===')
+print('题目总数: %d  (选择 %d / 判断 %d)' % (len(rows), meta['single'], meta['judge']))
+print('按分类:', Counter(r['cat'] for r in rows).most_common())
+print('丢弃题目数: %d' % len(dropped))
 for reason, stem in dropped:
-    if reason != '源文件无选项':
-        print('   - [%s] %s' % (reason, stem))
-print('   - [源文件无选项] %d 条（文档后半段“题干+答案文本”的残缺副本，题干与正题完全相同，不重复计入）'
-      % sum(1 for r, _ in dropped if r == '源文件无选项'))
+    print('   - [%s] %s' % (reason, stem))
 print('写出:', OUT, os.path.getsize(OUT), 'bytes')
+
