@@ -1,7 +1,12 @@
 package com.quiz.shukong;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -51,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
 
         web.setBackgroundColor(0xFFF4F6FB);
         web.setVerticalScrollBarEnabled(false);
+        web.addJavascriptInterface(new NativeBridge(), "AndroidBridge");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -65,16 +71,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // 返回键先交给网页处理（关抽屉/弹窗、回上一屏），网页不处理才退出
+        // 返回键先交给网页处理（关抽屉/弹窗、回上一级菜单），网页不拦截才退出应用
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 web.evaluateJavascript(
-                        "window.__onBackPressed && window.__onBackPressed()",
+                        "(function(){ try { return window.__onBackPressed ? (window.__onBackPressed() === true) : false; } catch(e) { return false; } })()",
                         value -> {
                             if (!"true".equals(value)) {
-                                setEnabled(false);
-                                getOnBackPressedDispatcher().onBackPressed();
+                                finish();
                             }
                         });
             }
@@ -104,5 +109,34 @@ public class MainActivity extends AppCompatActivity {
             web = null;
         }
         super.onDestroy();
+    }
+
+    public class NativeBridge {
+        @JavascriptInterface
+        public void vibrate(String type) {
+            try {
+                Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (v == null || !v.hasVibrator()) return;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if ("error".equals(type)) {
+                        long[] timings = {0, 40, 50, 40};
+                        int[] amplitudes = {0, 160, 0, 160};
+                        v.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1));
+                    } else if ("success".equals(type)) {
+                        v.vibrate(VibrationEffect.createOneShot(25, 100));
+                    } else {
+                        v.vibrate(VibrationEffect.createOneShot(15, 60));
+                    }
+                } else {
+                    if ("error".equals(type)) {
+                        v.vibrate(new long[]{0, 40, 50, 40}, -1);
+                    } else if ("success".equals(type)) {
+                        v.vibrate(25);
+                    } else {
+                        v.vibrate(15);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
     }
 }
