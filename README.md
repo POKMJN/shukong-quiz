@@ -103,30 +103,6 @@ python tools/make_assets.py                                     # 同步到 asse
 
 `source/` 目录不入库（题目内容版权归原出版方，见下）。
 
-## 云端控制与每日密码
-
-应用支持**远程云控每日密码**功能。通过修改 GitHub 仓库根目录下的 [`access_control.json`](access_control.json)，您可以随时决定**今天是否需要输入密码**以及**密码内容**，无需重新打包 APK：
-
-```json
-{
-  "enabled": false,
-  "password": "8888",
-  "notice": "今日学习密码请向指导老师获取",
-  "updated_at": "2026-09-17"
-}
-```
-
-### 控制参数说明
-- `enabled`: `true` 表示开启密码锁（学生启动应用必须输入密码）；`false` 表示关闭（所有人直接自由进入）。
-- `password`: 当日设定的密码字符串（如 `"8888"`、`"skq2026"` 等，支持字母与数字）。
-- `notice`: 锁屏界面显示的提示文案（如「今日密码请向指导老师获取」或「9月18日特训班密码」）。
-- `updated_at`: 配置更新日期。
-
-### 工作机制
-1. **秒级生效**：软件启动时通过国内高速 CDN 异步拉取该配置（超时 2.5 秒兜底，绝不卡死）。
-2. **当日免重复输入**：同一台手机当天验证成功后，当天内多次打开无需重复输入。
-3. **支持离线与容错**：无网络或断网环境下，已验证用户正常刷题，默认不阻拦学员学习。
-
 ## 项目结构
 
 ```
@@ -134,14 +110,12 @@ android/                         Android 工程
 ├── app/src/main/
 │   ├── java/com/quiz/shukong/MainActivity.java   # 单 WebView 壳
 │   └── assets/www/                               # 刷题应用本体
-│       ├── index.html           # 页面骨架（含每日密码锁屏）
+│       ├── index.html           # 页面骨架
 │       ├── style.css            # 样式（含非线性物理弹性动画）
-│       ├── app.js               # 业务逻辑（含手势切题、云控鉴权）
-│       ├── access_control.json  # 本地兜底访问控制配置
+│       ├── app.js               # 业务逻辑（含手势切题）
 │       └── qbank.js             # 题库（内联为 JS 变量，1200 题）
 └── build.gradle / settings.gradle
 
-access_control.json              根目录云端配置文件（直接在 GitHub 网页编辑即可生效）
 data/qbank.json                  结构化题库（1200 题，含分类）
 tools/build_bank.py              Word docx → 1200题全量 JSON 解析脚本
 tools/make_assets.py             JSON → qbank.js 同步脚本
@@ -157,8 +131,8 @@ docs/screenshots/                README 截图
 
 ## 已验证 / 测试
 
-- **Playwright 端到端自动化测试**：覆盖每日密码鉴权（正确/错误/回车/显隐切换/当日免密）、1200 题库加载、左右滑屏手势、模拟考试与错题本，100% 通过；
-- **Release APK 编译与签名**：成功打包输出 `数控车工刷题-v1.1.apk`（约 2.36 MB），已同步至桌面。
+- **Playwright 端到端自动化测试**：覆盖 1200 题库加载、左右滑屏手势、模拟考试与错题本，100% 通过；
+- **Release APK 编译与签名**：成功打包输出 `数控车工刷题-v1.2.apk`（约 2.36 MB），已同步至桌面。
 
 **未验证**
 
