@@ -69,6 +69,195 @@
   };
 
   /* ============================================================
+   *  特效引擎 (轻量 Canvas 粒子 & 庆典礼花)
+   * ============================================================ */
+  var FX = {
+    canvas: null,
+    ctx: null,
+    w: 0,
+    h: 0,
+    dpr: 1,
+    particles: [],
+    running: false,
+
+    init: function () {
+      this.canvas = document.getElementById('fx-canvas');
+      if (!this.canvas) return;
+      this.ctx = this.canvas.getContext('2d');
+      this.resize();
+      var self = this;
+      window.addEventListener('resize', function () { self.resize(); });
+    },
+
+    resize: function () {
+      if (!this.canvas) return;
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.w = window.innerWidth || document.documentElement.clientWidth || 360;
+      this.h = window.innerHeight || document.documentElement.clientHeight || 640;
+      this.canvas.width = Math.floor(this.w * this.dpr);
+      this.canvas.height = Math.floor(this.h * this.dpr);
+      if (this.ctx) {
+        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      }
+    },
+
+    // 答对时微星芒/微粒迸发 (以点击坐标为中心)
+    burst: function (x, y) {
+      if (!this.canvas || !this.ctx) this.init();
+      if (!this.ctx) return;
+
+      if (typeof x !== 'number' || isNaN(x)) x = this.w / 2;
+      if (typeof y !== 'number' || isNaN(y)) y = this.h / 2;
+
+      var colors = ['#10b981', '#34d399', '#f59e0b', '#fbbf24', '#3b82f6'];
+      var count = 16;
+      for (var i = 0; i < count; i++) {
+        var angle = (Math.PI * 2 * i) / count + (Math.random() * 0.4 - 0.2);
+        var speed = 3.2 + Math.random() * 4.2;
+        this.particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 1.2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: 3 + Math.random() * 2.5,
+          alpha: 1,
+          decay: 0.032 + Math.random() * 0.018,
+          gravity: 0.16,
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.2,
+          isStar: (i % 2 === 0)
+        });
+      }
+      this.start();
+    },
+
+    // 模拟考试及格全屏烟花彩带 (Confetti Rain & Fireworks)
+    confetti: function (isSuper) {
+      if (!this.canvas || !this.ctx) this.init();
+      if (!this.ctx) return;
+
+      var colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#fbbf24'];
+      var count = isSuper ? 115 : 75;
+
+      // 从屏幕底部左侧和右侧双向喷射彩带
+      for (var i = 0; i < count; i++) {
+        var fromLeft = (i % 2 === 0);
+        var startX = fromLeft ? (this.w * 0.12 + (Math.random() - 0.5) * 40) : (this.w * 0.88 + (Math.random() - 0.5) * 40);
+        var startY = this.h * 0.88 + Math.random() * 40;
+        var angle = fromLeft ? (-Math.PI / 4 + (Math.random() - 0.5) * 0.45) : (-Math.PI * 3 / 4 + (Math.random() - 0.5) * 0.45);
+        var speed = 12 + Math.random() * 11;
+
+        this.particles.push({
+          x: startX,
+          y: startY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          w: 6 + Math.random() * 5,
+          h: 9 + Math.random() * 7,
+          alpha: 1,
+          decay: 0.007 + Math.random() * 0.007,
+          gravity: 0.26,
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.22,
+          flutter: Math.random() * Math.PI,
+          flutterSpeed: 0.08 + Math.random() * 0.08,
+          isRibbon: true
+        });
+      }
+
+      // 上方燃放 2~3 朵星光礼花
+      var fireworkCount = isSuper ? 3 : 2;
+      for (var f = 0; f < fireworkCount; f++) {
+        var fx = this.w * (0.28 + f * 0.22);
+        var fy = this.h * (0.22 + Math.random() * 0.14);
+        var fwColor = colors[Math.floor(Math.random() * colors.length)];
+        for (var p = 0; p < 22; p++) {
+          var fa = (Math.PI * 2 * p) / 22;
+          var fs = 2.8 + Math.random() * 4.5;
+          this.particles.push({
+            x: fx,
+            y: fy,
+            vx: Math.cos(fa) * fs,
+            vy: Math.sin(fa) * fs,
+            color: fwColor,
+            size: 3 + Math.random() * 2,
+            alpha: 1,
+            decay: 0.014 + Math.random() * 0.014,
+            gravity: 0.12,
+            rotation: 0,
+            rotSpeed: 0,
+            isStar: true
+          });
+        }
+      }
+
+      this.start();
+    },
+
+    start: function () {
+      if (this.running) return;
+      this.running = true;
+      var self = this;
+      function loop() {
+        if (!self.running) return;
+        self.update();
+        if (self.particles.length > 0) {
+          requestAnimationFrame(loop);
+        } else {
+          self.running = false;
+          if (self.ctx) self.ctx.clearRect(0, 0, self.w, self.h);
+        }
+      }
+      requestAnimationFrame(loop);
+    },
+
+    update: function () {
+      if (!this.ctx) return;
+      this.ctx.clearRect(0, 0, this.w, this.h);
+
+      var next = [];
+      for (var i = 0; i < this.particles.length; i++) {
+        var p = this.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.985;
+        p.alpha -= p.decay;
+        p.rotation += p.rotSpeed;
+
+        if (p.alpha > 0.02 && p.y < this.h + 50) {
+          next.push(p);
+
+          this.ctx.save();
+          this.ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha));
+          this.ctx.fillStyle = p.color;
+
+          if (p.isRibbon) {
+            p.flutter += p.flutterSpeed;
+            var curW = p.w * Math.cos(p.flutter);
+            this.ctx.translate(p.x, p.y);
+            this.ctx.rotate(p.rotation);
+            this.ctx.fillRect(-curW / 2, -p.h / 2, curW, p.h);
+          } else if (p.isStar) {
+            this.ctx.translate(p.x, p.y);
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+          } else {
+            this.ctx.translate(p.x, p.y);
+            this.ctx.rotate(p.rotation);
+            this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          }
+          this.ctx.restore();
+        }
+      }
+      this.particles = next;
+    }
+  };
+
+  /* ============================================================
    *  持久化
    * ============================================================ */
   var Store = {
@@ -361,12 +550,42 @@
     fromCat: false,
     type: 'quiz', // 'quiz' (做题模式) | 'recite' (背题模式)
     sessionAnswers: {}, // 当前练习会话的作答状态（退出后清空，重新进入即为崭新未答状态）
+    streak: 0, // 连续答对计数器
     _slideDir: null,
     _autoNextTimer: null,
+
+    updateCombo: function (isCorrect) {
+      var pill = $('combo-pill');
+      var txt = $('combo-text');
+      if (!pill || !txt) return;
+
+      if (isCorrect === true) {
+        this.streak = (this.streak || 0) + 1;
+      } else if (isCorrect === false) {
+        this.streak = 0;
+      }
+
+      if (this.streak >= 3 && this.type !== 'recite') {
+        var desc = '';
+        if (this.streak >= 15) desc = ' · 考神附体!';
+        else if (this.streak >= 10) desc = ' · 势如破竹!';
+        else if (this.streak >= 5) desc = ' · 渐入佳境!';
+        txt.textContent = '连对 ' + this.streak + ' 题' + desc;
+        pill.classList.remove('hidden');
+        pill.classList.remove('pop');
+        void pill.offsetWidth;
+        pill.classList.add('show', 'pop');
+      } else {
+        pill.classList.remove('show');
+        pill.classList.add('hidden');
+      }
+    },
 
     switchType: function (t) {
       if (this.type === t) return;
       this.type = t;
+      this.streak = 0;
+      this.updateCombo();
       var btnQ = $('tab-mode-quiz'), btnR = $('tab-mode-recite');
       if (btnQ) btnQ.classList.toggle('active', t === 'quiz');
       if (btnR) btnR.classList.toggle('active', t === 'recite');
@@ -385,6 +604,8 @@
       this.fromCat = !!fromCat;
       this.type = (mode === 'random') ? 'quiz' : (isInspect ? 'recite' : 'quiz');
       this.sessionAnswers = {}; // 每次进入练习全新重置作答状态
+      this.streak = 0;
+      this.updateCombo();
       this._slideDir = null;
       $('p-title').textContent = title;
 
@@ -417,6 +638,8 @@
         clearTimeout(this._autoNextTimer);
         this._autoNextTimer = null;
       }
+      this.streak = 0;
+      this.updateCombo();
       this.sessionAnswers = {}; // 退出后自动清空当前作答状态
       Nav.back();
     },
@@ -461,7 +684,7 @@
           else cls += ' dim';
         }
         html += '<button class="' + cls + '"' +
-          ((isRecite || answered) ? ' disabled' : ' onclick="Practice.pick(' + i + ')"') + '>' +
+          ((isRecite || answered) ? ' disabled' : ' onclick="Practice.pick(' + i + ', event)"') + '>' +
           '<span class="key">' + key + '</span>' +
           '<span class="txt">' + esc(text) + '</span></button>';
       });
@@ -499,7 +722,7 @@
       document.querySelector('#screen-practice .scroll').scrollTop = 0;
     },
 
-    pick: function (i) {
+    pick: function (i, ev) {
       if (this.type === 'recite') return;
       var q = this.cur();
       if (this.sessionAnswers[q.id] !== undefined) return;
@@ -516,8 +739,13 @@
       var isCorrect = (i === q.answer);
       if (isCorrect) {
         Haptic.play('success');
+        var bx = (ev && typeof ev.clientX === 'number' && ev.clientX > 0) ? ev.clientX : undefined;
+        var by = (ev && typeof ev.clientY === 'number' && ev.clientY > 0) ? ev.clientY : undefined;
+        FX.burst(bx, by);
+        this.updateCombo(true);
       } else {
         Haptic.play('error');
+        this.updateCombo(false);
       }
 
       if (this.mode === 'wrong' && isCorrect) {
@@ -980,7 +1208,7 @@
       Store.data.exams = Store.data.exams.slice(0, 30);
       Store.save();
 
-      Result.render(rec, this.paper, this.picks, timeout);
+      Result.render(rec, this.paper, this.picks, timeout, true);
     }
   };
 
@@ -988,7 +1216,7 @@
    *  成绩页
    * ============================================================ */
   var Result = {
-    render: function (rec, paper, picks, timeout) {
+    render: function (rec, paper, picks, timeout, isFreshSubmit) {
       var pass = rec.score >= 60;
       var cls = rec.score >= 85 ? 'pass' : (pass ? 'pass' : 'fail');
       var avg = (rec.used / rec.total).toFixed(1);
@@ -1031,6 +1259,13 @@
       this._paper = paper;
       this._picks = picks;
       Nav.goto('result');
+
+      if (isFreshSubmit && pass) {
+        Haptic.play('success');
+        setTimeout(function () {
+          FX.confetti(rec.score >= 85);
+        }, 180);
+      }
     },
 
     review: function () {
@@ -1481,6 +1716,7 @@
     );
 
     ExamSetup.init();
+    FX.init();
     Home.render();
     Nav.goto('home', true);
 
@@ -1508,6 +1744,7 @@
   window.Store = Store;
   window.AccessControl = AccessControl;
   window.Haptic = Haptic;
+  window.FX = FX;
 
   // Android 返回键支持
   window.__onBackPressed = function () {

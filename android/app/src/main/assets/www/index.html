@@ -106,6 +106,7 @@
         <button class="mode-tab" id="tab-mode-recite" onclick="Practice.switchType('recite')">📖 背题模式</button>
       </div>
     </div>
+    <div id="combo-pill" class="combo-pill hidden"><span class="combo-fire">🔥</span><span id="combo-text">连对 3 题</span></div>
     <div class="scroll"><div class="wrap" id="p-body"></div></div>
     <div class="footbar">
       <button class="btn" id="p-prev" onclick="Practice.step(-1)">上一题</button>
@@ -268,6 +269,8 @@
     <div class="lock-status" id="lock-status"></div>
   </div>
 </div>
+
+<canvas id="fx-canvas"></canvas>
 
 <script src="qbank.js?v=1.0"></script>
 <script src="app.js?v=1.0"></script>
