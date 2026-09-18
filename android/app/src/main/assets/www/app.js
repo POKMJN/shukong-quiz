@@ -81,6 +81,14 @@
       if (!this.data.rec) this.data.rec = {};
       if (!this.data.fav) this.data.fav = {};
       if (!this.data.exams) this.data.exams = [];
+      if (!this.data.wrongs) {
+        this.data.wrongs = {};
+        for (var k in this.data.rec) {
+          if (this.isCorrect(k) === false) {
+            this.data.wrongs[k] = true;
+          }
+        }
+      }
       return this.data;
     },
 
@@ -90,14 +98,37 @@
     },
 
     reset: function () {
-      this.data = { rec: {}, fav: {}, exams: [] };
+      this.data = { rec: {}, fav: {}, exams: [], wrongs: {} };
       this.save();
     },
 
     /* 记录一次作答：pick 为【原始题库选项下标】，对错由题库答案现算 */
     mark: function (qid, pick) {
       this.data.rec[qid] = pick;
+      var q = BY_ID[qid];
+      if (q && pick !== undefined && pick !== null) {
+        if (pick !== q.answer) {
+          this.addWrong(qid);
+        }
+      }
       this.save();
+    },
+
+    addWrong: function (qid) {
+      if (!this.data.wrongs) this.data.wrongs = {};
+      this.data.wrongs[qid] = true;
+      this.save();
+    },
+
+    removeWrong: function (qid) {
+      if (this.data.wrongs && this.data.wrongs[qid]) {
+        delete this.data.wrongs[qid];
+        this.save();
+      }
+    },
+
+    isWrong: function (qid) {
+      return !!(this.data.wrongs && this.data.wrongs[qid]);
     },
 
     /* 是否已作答 */
@@ -120,8 +151,9 @@
     },
 
     wrongIds: function () {
-      var r = this.data.rec, out = [];
-      for (var k in r) if (this.isCorrect(k) === false) out.push(+k);
+      if (!this.data.wrongs) return [];
+      var out = [];
+      for (var k in this.data.wrongs) if (this.data.wrongs[k]) out.push(+k);
       return out.sort(function (a, b) { return a - b; });
     },
 
@@ -202,6 +234,10 @@
       var sc = next && next.querySelector('.scroll');
       if (sc) sc.scrollTop = 0;
       this.current = name;
+      if (name === 'home') Home.render();
+      else if (name === 'list') List.render();
+      else if (name === 'stats') Stats.render();
+      else if (name === 'exam-setup') ExamSetup.renderHistory();
     },
     /* Android 返回键与统一返回上一级菜单 */
     back: function () {
@@ -323,9 +359,19 @@
     title: '',
     mode: 'order',
     fromCat: false,
-    isInspect: false,
+    type: 'quiz', // 'quiz' (做题模式) | 'recite' (背题模式)
+    sessionAnswers: {}, // 当前练习会话的作答状态（退出后清空，重新进入即为崭新未答状态）
     _slideDir: null,
     _autoNextTimer: null,
+
+    switchType: function (t) {
+      if (this.type === t) return;
+      this.type = t;
+      var btnQ = $('tab-mode-quiz'), btnR = $('tab-mode-recite');
+      if (btnQ) btnQ.classList.toggle('active', t === 'quiz');
+      if (btnR) btnR.classList.toggle('active', t === 'recite');
+      this.render();
+    },
 
     begin: function (ids, title, mode, fromCat, isInspect, startIdx) {
       if (this._autoNextTimer) {
@@ -337,9 +383,31 @@
       this.title = title;
       this.mode = mode;
       this.fromCat = !!fromCat;
-      this.isInspect = !!isInspect;
+      this.type = (mode === 'random') ? 'quiz' : (isInspect ? 'recite' : 'quiz');
+      this.sessionAnswers = {}; // 每次进入练习全新重置作答状态
       this._slideDir = null;
       $('p-title').textContent = title;
+
+      // 基础练习（order）与错题本（wrong/snapshot）内置切换条，随机练习纯做题
+      var toolbar = document.querySelector('.practice-toolbar');
+      var showToolbar = (mode === 'order' || mode === 'wrong' || mode === 'snapshot');
+      if (toolbar) {
+        toolbar.style.display = showToolbar ? 'flex' : 'none';
+      }
+
+      var btnQ = $('tab-mode-quiz'), btnR = $('tab-mode-recite');
+      if (btnQ && btnR) {
+        if (mode === 'wrong' || mode === 'snapshot') {
+          btnQ.innerHTML = '📝 答题模式';
+          btnR.innerHTML = '🔍 检查模式';
+        } else {
+          btnQ.innerHTML = '📝 做题模式';
+          btnR.innerHTML = '📖 背题模式';
+        }
+        btnQ.classList.toggle('active', this.type === 'quiz');
+        btnR.classList.toggle('active', this.type === 'recite');
+      }
+
       Nav.goto('practice');
       this.render();
     },
@@ -349,6 +417,7 @@
         clearTimeout(this._autoNextTimer);
         this._autoNextTimer = null;
       }
+      this.sessionAnswers = {}; // 退出后自动清空当前作答状态
       Nav.back();
     },
 
@@ -357,10 +426,10 @@
     render: function () {
       var q = this.cur();
       if (!q) return;
-      var rec = Store.data.rec[q.id];
-      var answered = Store.answered(q.id);
       var isJudge = q.type === 'judge';
-      var isInspect = this.isInspect;
+      var isRecite = (this.type === 'recite');
+      var userPick = this.sessionAnswers[q.id];
+      var answered = (userPick !== undefined);
 
       $('p-sub').textContent = (this.idx + 1) + ' / ' + this.ids.length;
       $('p-prev').toggleAttribute('disabled', this.idx === 0);
@@ -371,10 +440,10 @@
       var html = '<div class="qhead">' +
         '<span class="tag">' + (isJudge ? '判断题' : '单选题') + '</span>' +
         '<span class="tag gray">' + esc(q.cat) + '</span>';
-      if (isInspect) {
-        html += '<span class="tag violet">🔍 检查模式</span>';
+      if (isRecite) {
+        html += '<span class="tag violet">' + ((this.mode === 'wrong' || this.mode === 'snapshot') ? '🔍 检查模式' : '📖 背题模式') + '</span>';
       } else if (answered) {
-        html += '<span class="tag ' + (rec === q.answer ? 'ok">✓ 已答对' : 'err">✗ 已答错') + '</span>';
+        html += '<span class="tag ' + (userPick === q.answer ? 'ok">✓ 回答正确' : 'err">✗ 回答错误') + '</span>';
       }
       html += '</div>';
 
@@ -383,36 +452,36 @@
       q.opts.forEach(function (text, i) {
         var cls = 'opt';
         var key = isJudge ? (i === 0 ? '√' : '×') : LETTERS[i];
-        if (isInspect) {
+        if (isRecite) {
           if (i === q.answer) cls += ' is-correct';
           else cls += ' dim';
         } else if (answered) {
           if (i === q.answer) cls += ' is-correct';
-          else if (i === rec) cls += ' picked-wrong';
+          else if (i === userPick) cls += ' picked-wrong';
           else cls += ' dim';
         }
         html += '<button class="' + cls + '"' +
-          ((isInspect || answered) ? ' disabled' : ' onclick="Practice.pick(' + i + ')"') + '>' +
+          ((isRecite || answered) ? ' disabled' : ' onclick="Practice.pick(' + i + ')"') + '>' +
           '<span class="key">' + key + '</span>' +
           '<span class="txt">' + esc(text) + '</span></button>';
       });
       html += '</div>';
 
-      if (isInspect || answered) {
-        var ok = isInspect ? true : (rec === q.answer);
+      if (isRecite || answered) {
+        var ok = isRecite ? true : (userPick === q.answer);
         html += '<div class="analysis">' +
-          '<div class="verdict ' + (ok ? 'ok">✓ ' + (isInspect ? '标准答案' : '回答正确') : 'err">✗ 回答错误') + '</div>' +
+          '<div class="verdict ' + (ok ? 'ok">✓ ' + (isRecite ? '标准答案' : '回答正确') : 'err">✗ 回答错误') + '</div>' +
           '<div class="row"><span class="k">正确答案</span><span class="v ok">' +
             (isJudge ? '' : LETTERS[q.answer] + '、') + esc(q.opts[q.answer]) + '</span></div>';
-        if (!isInspect && !ok) {
+        if (!isRecite && !ok) {
           html += '<div class="row"><span class="k">你的答案</span><span class="v err">' +
-            (isJudge ? '' : LETTERS[rec] + '、') + esc(q.opts[rec]) + '</span></div>';
+            (isJudge ? '' : LETTERS[userPick] + '、') + esc(q.opts[userPick]) + '</span></div>';
         }
         html += '<div class="row"><span class="k">所属分类</span><span class="v">' + esc(q.cat) + '</span></div>';
 
-        if (Practice.mode === 'wrong') {
+        if (Practice.mode === 'wrong' || Store.isWrong(q.id)) {
           html += '<div style="margin-top:12px;text-align:right">' +
-            '<button class="btn sm" style="font-size:12px;color:var(--text-2);background:#fff;border:1px solid #cbd5e1" onclick="Practice.removeWrong(' + q.id + ')">🗑️ 移出错题本</button>' +
+            '<button class="remove-wrong-btn" onclick="Practice.removeWrong(' + q.id + ')">🗑️ 移出错题本</button>' +
           '</div>';
         }
         html += '</div>';
@@ -431,16 +500,17 @@
     },
 
     pick: function (i) {
-      if (this.isInspect) return;
+      if (this.type === 'recite') return;
       var q = this.cur();
-      if (Store.answered(q.id)) return;
+      if (this.sessionAnswers[q.id] !== undefined) return;
 
       if (this._autoNextTimer) {
         clearTimeout(this._autoNextTimer);
         this._autoNextTimer = null;
       }
 
-      Store.mark(q.id, i);
+      this.sessionAnswers[q.id] = i;
+      Store.mark(q.id, i); // 持久化答题并更新错题本
       this.render();
 
       var isCorrect = (i === q.answer);
@@ -451,7 +521,7 @@
       }
 
       if (this.mode === 'wrong' && isCorrect) {
-        Toast.show('回答正确，已攻克！');
+        Toast.show('回答正确！');
       }
 
       // 普通练习模式（order）和随机练习（random），以及错题本答题（wrong）：答对等待0.5秒自动跳转到下一题
@@ -491,16 +561,18 @@
       var q = BY_ID[qid];
       if (!q) return;
       Haptic.play('light');
-      Store.mark(qid, q.answer);
+      Store.removeWrong(qid);
       Toast.show('已移出错题本');
       var at = this.ids.indexOf(qid);
-      if (at >= 0) this.ids.splice(at, 1);
-      if (!this.ids.length) {
-        Toast.show('已无剩余错题');
-        Nav.back();
-        return;
+      if (at >= 0 && this.mode === 'wrong') {
+        this.ids.splice(at, 1);
+        if (!this.ids.length) {
+          Toast.show('已无剩余错题');
+          Nav.back();
+          return;
+        }
+        if (this.idx >= this.ids.length) this.idx = this.ids.length - 1;
       }
-      if (this.idx >= this.ids.length) this.idx = this.ids.length - 1;
       this.render();
     },
 
@@ -518,15 +590,17 @@
         var h = '';
         self.ids.forEach(function (id, i) {
           var cls = '';
-          if (self.isInspect) {
+          if (self.type === 'recite') {
             cls = 'ok';
           } else {
-            var okRec = Store.isCorrect(id);
-            if (okRec === true) cls = 'ok';
-            else if (okRec === false) cls = 'err';
+            var ans = self.sessionAnswers[id];
+            if (ans !== undefined) {
+              var q = BY_ID[id];
+              cls = (ans === q.answer) ? 'ok' : 'err';
+            }
           }
           if (i === self.idx) cls += ' cur';
-          h += '<button class="' + cls + '" onclick="Practice.jump(' + i + ')">' + (i + 1) + '</button>';
+          h += '<button class="' + cls.trim() + '" onclick="Practice.jump(' + i + ')">' + (i + 1) + '</button>';
         });
         grid.innerHTML = h;
       });
@@ -672,22 +746,38 @@
       var h = Store.data.exams;
       var box = $('exam-history');
       if (!h.length) { box.innerHTML = ''; return; }
-      var html = '<div class="section-title">最近考试</div>';
-      h.slice(0, 5).forEach(function (e) {
+      var html = '<div class="section-title">最近考试记录</div>';
+      h.slice(0, 8).forEach(function (e, idx) {
         var pass = e.score >= 60;
-        html += '<div class="card" style="margin-bottom:10px;padding:14px;display:flex;align-items:center;gap:14px">' +
-          '<div style="text-align:center;flex:none;width:62px">' +
-            '<div style="font-size:24px;font-weight:800;color:' + (pass ? 'var(--ok)' : 'var(--err)') + '">' + e.score + '</div>' +
-            '<div style="font-size:11px;color:var(--text-3)">分</div>' +
+        html += '<div class="card history-card" onclick="ExamSetup.viewHistory(' + idx + ')" style="margin-bottom:10px;padding:14px;cursor:pointer">' +
+          '<div style="display:flex;align-items:center;gap:14px">' +
+            '<div style="text-align:center;flex:none;width:62px">' +
+              '<div style="font-size:24px;font-weight:800;color:' + (pass ? 'var(--ok)' : 'var(--err)') + '">' + e.score + '</div>' +
+              '<div style="font-size:11px;color:var(--text-3)">分</div>' +
+            '</div>' +
+            '<div style="flex:1;font-size:12.8px;color:var(--text-2);line-height:1.6">' +
+              '<div style="font-weight:600;color:var(--text)">' + (e.kind || '模拟考试') + ' · ' + esc(e.date) + '</div>' +
+              '<div>共 ' + e.total + ' 题 · 对 ' + e.ok + ' 题 / 错 ' + e.bad + ' 题 · 用时 ' + fmtDur(e.used) + '</div>' +
+            '</div>' +
+            '<span class="tag ' + (pass ? 'ok">及格' : 'err">不及格') + '</span>' +
           '</div>' +
-          '<div style="flex:1;font-size:12.8px;color:var(--text-2);line-height:1.6">' +
-            '<div>' + esc(e.date) + ' · ' + e.total + ' 题</div>' +
-            '<div>对 ' + e.ok + ' 题 / 错 ' + e.bad + ' 题 · 用时 ' + fmtDur(e.used) + '</div>' +
+          '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--brand)">' +
+            '<span>' + (e.bad ? '⚠️ 包含 ' + e.bad + ' 道错题待复盘' : '✨ 全部答对，表现优秀') + '</span>' +
+            '<span>查看答卷详情与错题 →</span>' +
           '</div>' +
-          '<span class="tag ' + (pass ? 'ok">及格' : 'err">不及格') + '</span>' +
         '</div>';
       });
       box.innerHTML = html;
+    },
+
+    viewHistory: function (idx) {
+      var e = Store.data.exams[idx];
+      if (!e) return;
+      if (e.paper && e.picks) {
+        Result.render(e, e.paper, e.picks, false);
+      } else {
+        Modal.ask('提示', '该次考试为旧版本记录，未保存题目快照。请进行一次新的模拟考试，新考试均可随时查看错题与答卷。', '我知道了', function () {});
+      }
     }
   };
 
@@ -757,10 +847,23 @@
       var q = BY_ID[p.qid];
       var isJudge = q.type === 'judge';
       var picked = this.picks[this.idx];
+      var isLast = (this.idx === this.total - 1);
 
       $('e-sub').textContent = (this.idx + 1) + ' / ' + this.total;
       $('e-prev').toggleAttribute('disabled', this.idx === 0);
-      $('e-next').textContent = this.idx === this.total - 1 ? '交卷' : '下一题';
+      
+      var nextBtn = $('e-next');
+      if (nextBtn) {
+        if (isLast) {
+          nextBtn.textContent = '交卷';
+          nextBtn.classList.add('submit-state');
+          nextBtn.onclick = function () { Exam.confirmSubmit(); };
+        } else {
+          nextBtn.textContent = '下一题';
+          nextBtn.classList.remove('submit-state');
+          nextBtn.onclick = function () { Exam.step(1); };
+        }
+      }
 
       var html = '<div class="qhead">' +
         '<span class="tag">' + (isJudge ? '判断题' : '单选题') + '</span>' +
@@ -798,7 +901,14 @@
         if (isSwipe) Toast.show('已经是第一题了');
         return;
       }
-      if (n >= this.total) { this.confirmSubmit(); return; }
+      if (n >= this.total) {
+        if (isSwipe) {
+          Toast.show('已是最后一题，检查完毕请点击「交卷」');
+        } else {
+          this.confirmSubmit();
+        }
+        return;
+      }
       this._slideDir = d > 0 ? 'right' : 'left';
       this.idx = n;
       this.render();
@@ -832,9 +942,13 @@
     confirmSubmit: function () {
       var self = this;
       var blank = this.total - Object.keys(this.picks).length;
-      if (!blank) { this.finish(false); return; }
-      Modal.ask('确认交卷', '还有 <b>' + blank + '</b> 道题未作答，未作答按错题计分。确定交卷吗？', '交卷',
-        function () { self.finish(false); });
+      if (blank === 0) {
+        Modal.ask('确认交卷', '本次考试共 ' + this.total + ' 题已全部作答完成。<br>确定现在提交试卷并查看成绩吗？', '交卷',
+          function () { self.finish(false); });
+      } else {
+        Modal.ask('确认交卷', '还有 <b style="color:var(--err)">' + blank + '</b> 道题未作答，未作答将按 0 分计。<br>确定交卷吗？', '交卷',
+          function () { self.finish(false); });
+      }
     },
 
     finish: function (timeout) {
@@ -851,12 +965,16 @@
         var pick = Exam.picks[i];
         Store.mark(p.qid, pick === undefined ? -1 : p.orig[pick]);
       });
-      Store.save();
 
       var rec = {
+        id: Date.now(),
         date: fmtDate(new Date()),
         total: this.total, ok: ok, bad: bad, score: score, used: used,
-        kind: this.kind
+        kind: this.kind,
+        paper: this.paper.map(function (p) {
+          return { qid: p.qid, opts: p.opts, orig: p.orig, answer: p.answer };
+        }),
+        picks: Object.assign({}, this.picks)
       };
       Store.data.exams.unshift(rec);
       Store.data.exams = Store.data.exams.slice(0, 30);
@@ -931,13 +1049,11 @@
     mode: 'wrong',
     ids: [],
     title: '',
-    viewType: 'quiz', // 'quiz' 答题模式 | 'inspect' 检查模式（背题）
 
     open: function (mode) {
       this.mode = mode;
       this.ids = mode === 'wrong' ? Store.wrongIds() : Store.favIds();
       this.title = mode === 'wrong' ? '错题本' : '我的收藏';
-      this.viewType = 'quiz';
       Nav.goto('list');
       this.render();
     },
@@ -946,20 +1062,14 @@
       this.mode = 'snapshot';
       this.ids = ids;
       this.title = title;
-      this.viewType = 'inspect';
       Nav.goto('list');
-      this.render();
-    },
-
-    setViewType: function (vt) {
-      this.viewType = vt;
       this.render();
     },
 
     render: function () {
       $('l-title').textContent = this.title;
       var act = $('l-action');
-      act.textContent = this.ids.length ? (this.viewType === 'inspect' ? '🔍' : '▶') : '';
+      act.textContent = this.ids.length ? '▶' : '';
       act.style.visibility = this.ids.length ? 'visible' : 'hidden';
 
       if (!this.ids.length) {
@@ -973,23 +1083,16 @@
 
       var html = '';
       if (this.mode === 'wrong') {
-        html += '<div class="card" style="margin-bottom:12px;padding:12px 14px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-            '<span style="font-size:13.5px;font-weight:600;color:var(--text)">学习模式</span>' +
-            '<span style="font-size:12px;color:var(--text-3)">共 ' + this.ids.length + ' 题待攻克</span>' +
-          '</div>' +
-          '<div class="chips" style="display:flex;gap:8px">' +
-            '<button class="chip ' + (this.viewType === 'quiz' ? 'on' : '') + '" onclick="List.setViewType(\'quiz\')">📝 答题模式</button>' +
-            '<button class="chip ' + (this.viewType === 'inspect' ? 'on' : '') + '" onclick="List.setViewType(\'inspect\')">🔍 检查模式</button>' +
-          '</div>' +
-          '<div style="font-size:12px;color:var(--text-2);margin-top:8px;line-height:1.5">' +
-            (this.viewType === 'quiz'
-              ? '重新作答错题，检验是否真正掌握。答对 0.5 秒自动跳转下一题并消灭错题。'
-              : '直接显示错题的标准答案与解析，无需点击作答，像翻书一样快速背题查漏。') +
-          '</div>' +
+        html += '<div class="card" style="margin-bottom:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:13.5px;font-weight:600;color:var(--text)">待攻克错题</span>' +
+          '<span style="font-size:12.5px;color:var(--brand);font-weight:600">共 ' + this.ids.length + ' 题</span>' +
         '</div>' +
         '<button class="btn primary" style="width:100%;height:46px;margin-bottom:14px;font-size:15px" onclick="List.doAction()">' +
-          (this.viewType === 'quiz' ? '📝 开始答题攻克（' + this.ids.length + ' 题）' : '🔍 开始快速检查（' + this.ids.length + ' 题）') +
+          '📝 开始复习错题（' + this.ids.length + ' 题）' +
+        '</button>';
+      } else if (this.mode === 'snapshot') {
+        html += '<button class="btn primary" style="width:100%;height:46px;margin-bottom:14px;font-size:15px" onclick="List.doAction()">' +
+          '🔍 查看全部考试错题（' + this.ids.length + ' 题）' +
         '</button>';
       } else {
         html += '<div style="font-size:12.5px;color:var(--text-3);padding:0 2px 12px">' +
@@ -1006,8 +1109,7 @@
             '<span class="tag">' + (q.type === 'judge' ? '判断' : '单选') + '</span>' +
             '<span>' + esc(q.cat) + '</span>' +
             (Store.isFav(id) ? '<span style="color:#ea8a1b">★</span>' : '') +
-            (Store.isCorrect(id) === true ? '<span class="tag ok">已答对</span>' :
-              (Store.isCorrect(id) === false ? '<span class="tag err">答错</span>' : '')) +
+            (Store.isWrong(id) ? '<span class="tag err">错题</span>' : '') +
           '</div></button>';
       });
       $('l-body').innerHTML = html;
@@ -1016,20 +1118,14 @@
     view: function (id) {
       var startIdx = this.ids.indexOf(id);
       if (startIdx < 0) startIdx = 0;
-      var isInspect = (this.viewType === 'inspect');
-      var title = this.mode === 'wrong'
-        ? (isInspect ? '错题本 · 检查' : '错题本 · 答题')
-        : (this.mode === 'snapshot' ? '考试错题' : '收藏题目');
-      Practice.begin(this.ids.concat(), title, this.mode, false, isInspect, startIdx);
+      var isInspect = (this.mode === 'snapshot');
+      Practice.begin(this.ids.concat(), this.title, this.mode, false, isInspect, startIdx);
     },
 
     doAction: function () {
       if (!this.ids.length) return;
-      var isInspect = (this.viewType === 'inspect');
-      var title = this.mode === 'wrong'
-        ? (isInspect ? '错题本 · 检查' : '错题本 · 答题')
-        : this.title;
-      Practice.begin(this.ids.concat(), title, this.mode, false, isInspect, 0);
+      var isInspect = (this.mode === 'snapshot');
+      Practice.begin(this.ids.concat(), this.title, this.mode, false, isInspect, 0);
     }
   };
 

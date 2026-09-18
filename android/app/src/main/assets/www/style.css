@@ -639,3 +639,88 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   * { transition: none !important; animation: none !important; }
 }
 
+/* ---------- 练习顶部做题/背题模式切换条 ---------- */
+.practice-toolbar {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+}
+.mode-switch {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 20px;
+  padding: 3px;
+  width: 100%;
+  max-width: 320px;
+  gap: 4px;
+}
+.mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 7px 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  border-radius: 17px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+.mode-tab:active {
+  transform: scale(0.97);
+}
+.mode-tab.active {
+  background: #fff;
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.nav-text-btn {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  flex: none;
+  transition: all 0.18s;
+}
+.nav-text-btn:active {
+  background: rgba(255, 255, 255, 0.32);
+}
+.history-card {
+  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+}
+.history-card:active {
+  transform: scale(0.985);
+  background: #f8fafc;
+}
+
+.remove-wrong-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.remove-wrong-btn:active {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  transform: scale(0.97);
+}
+

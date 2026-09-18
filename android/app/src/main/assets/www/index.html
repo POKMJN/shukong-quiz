@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>数控车工考证刷题</title>
-<link rel="stylesheet" href="style.css?v=1.2">
+<link rel="stylesheet" href="style.css?v=1.0">
 </head>
 <body>
 
@@ -100,6 +100,12 @@
       </div>
       <button class="icon-btn" onclick="Practice.openCard()">☰</button>
     </div>
+    <div class="practice-toolbar">
+      <div class="mode-switch">
+        <button class="mode-tab active" id="tab-mode-quiz" onclick="Practice.switchType('quiz')">📝 做题模式</button>
+        <button class="mode-tab" id="tab-mode-recite" onclick="Practice.switchType('recite')">📖 背题模式</button>
+      </div>
+    </div>
     <div class="scroll"><div class="wrap" id="p-body"></div></div>
     <div class="footbar">
       <button class="btn" id="p-prev" onclick="Practice.step(-1)">上一题</button>
@@ -171,6 +177,7 @@
         <small><span id="e-kind">标准卷</span> · <span id="e-sub">1 / 100</span></small>
       </div>
       <div class="exam-timer" id="e-timer">--:--</div>
+      <button class="nav-text-btn" onclick="Exam.confirmSubmit()">交卷</button>
     </div>
     <div class="scroll"><div class="wrap" id="e-body"></div></div>
     <div class="footbar">
@@ -262,7 +269,7 @@
   </div>
 </div>
 
-<script src="qbank.js?v=1.2"></script>
-<script src="app.js?v=1.2"></script>
+<script src="qbank.js?v=1.0"></script>
+<script src="app.js?v=1.0"></script>
 </body>
 </html>
