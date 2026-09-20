@@ -7,9 +7,17 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>数控车工考证刷题</title>
+<meta name="theme-color" content="#007aff" id="meta-theme-color">
 <link rel="stylesheet" href="style.css?v=1.0">
 </head>
 <body>
+
+<!-- 苹果毛玻璃环境氛围光晕 -->
+<div class="ambient-mesh" aria-hidden="true">
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+</div>
 
 <div id="loading">
   <div class="spinner"></div>
@@ -22,6 +30,13 @@
   <section id="screen-home" class="screen active">
     <div class="scroll">
       <div class="hero">
+        <div class="hero-header">
+          <span class="hero-badge">CNC 车工中级</span>
+          <button class="theme-pill" id="theme-btn" onclick="Theme.cycle()" title="切换外观主题" aria-label="切换外观主题">
+            <span id="theme-icon">🌓</span>
+            <span id="theme-label">跟随系统</span>
+          </button>
+        </div>
         <h1 id="home-title">数控车工（中级）考证</h1>
         <p>理论知识题库 · 顺序练习 / 随机练习 / 模拟考试</p>
         <div class="stat-row">
@@ -45,7 +60,7 @@
           <button class="mode" onclick="Home.startPractice('order')">
             <span class="mi blue">📖</span>
             <b>基础练习</b>
-            <span>按题库顺序逐题作答，答后即时讲解</span>
+            <span id="order-sub">按题库顺序逐题作答，答后即时讲解</span>
           </button>
           <button class="mode" onclick="Home.startPractice('random')">
             <span class="mi violet">🔀</span>
@@ -77,12 +92,7 @@
         <div class="section-title">按分类练习</div>
         <div class="card" id="cat-list" style="padding:4px 16px"></div>
 
-        <div style="height:28px"></div>
-        <div class="card" style="text-align:center;padding:14px">
-          <button class="btn" style="background:#fff;color:var(--text-2)" onclick="Home.confirmReset()">
-            清空所有练习记录
-          </button>
-        </div>
+        <div style="height:12px"></div>
         <div style="text-align:center;font-size:11.5px;color:var(--text-3);padding:16px 0 26px">
           题库共 <span id="foot-total">0</span> 题 · 数据来源：数控车工中级考证理论题
         </div>
@@ -101,7 +111,8 @@
       <button class="icon-btn" onclick="Practice.openCard()">☰</button>
     </div>
     <div class="practice-toolbar">
-      <div class="mode-switch">
+      <div class="mode-switch" id="practice-mode-switch" data-tab="quiz">
+        <div class="mode-glider"></div>
         <button class="mode-tab active" id="tab-mode-quiz" onclick="Practice.switchType('quiz')">📝 做题模式</button>
         <button class="mode-tab" id="tab-mode-recite" onclick="Practice.switchType('recite')">📖 背题模式</button>
       </div>
@@ -191,7 +202,7 @@
   <!-- ============ 成绩 ============ -->
   <section id="screen-result" class="screen">
     <div class="navbar">
-      <button class="icon-btn" onclick="Nav.back()">←</button>
+      <button class="icon-btn ghost">·</button>
       <div class="nav-title">考试成绩</div>
       <button class="icon-btn ghost">·</button>
     </div>
@@ -225,7 +236,10 @@
 <div class="drawer" id="card-drawer">
   <div class="dh">
     <b>答题卡</b>
-    <button class="close" onclick="Cards.close()">✕</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="card-clear-btn" class="card-clear-btn" style="display:none" onclick="Cards.clearCurrent()">清理答题记录</button>
+      <button class="close" onclick="Cards.close()">✕</button>
+    </div>
   </div>
   <div class="db">
     <div class="legend">

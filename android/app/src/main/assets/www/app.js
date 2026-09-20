@@ -269,6 +269,7 @@
       } catch (e) { this.data = {}; }
       if (!this.data.rec) this.data.rec = {};
       if (!this.data.fav) this.data.fav = {};
+      if (!this.data.theme) this.data.theme = 'auto';
       if (!this.data.exams) this.data.exams = [];
       if (!this.data.wrongs) {
         this.data.wrongs = {};
@@ -287,7 +288,37 @@
     },
 
     reset: function () {
-      this.data = { rec: {}, fav: {}, exams: [], wrongs: {} };
+      var currentTheme = (this.data && this.data.theme) || 'auto';
+      this.data = { rec: {}, fav: {}, exams: [], wrongs: {}, orderProgress: 0, theme: currentTheme };
+      this.save();
+    },
+
+    saveOrderProgress: function (idx) {
+      if (!this.data) this.load();
+      this.data.orderProgress = idx;
+      this.save();
+    },
+
+    getOrderProgress: function () {
+      if (!this.data) this.load();
+      return typeof this.data.orderProgress === 'number' ? this.data.orderProgress : 0;
+    },
+
+    clearOrderRecords: function () {
+      if (!this.data) this.load();
+      this.data.rec = {};
+      this.data.orderProgress = 0;
+      this.save();
+    },
+
+    getTheme: function () {
+      if (!this.data) this.load();
+      return this.data.theme || 'auto';
+    },
+
+    setTheme: function (theme) {
+      if (!this.data) this.load();
+      this.data.theme = theme;
       this.save();
     },
 
@@ -389,19 +420,123 @@
   };
 
   /* ============================================================
+   *  外观主题管理 (Dark Mode & Liquid Glass)
+   * ============================================================ */
+  var Theme = {
+    mediaQuery: null,
+    current: 'auto', // 'auto' | 'light' | 'dark'
+
+    init: function () {
+      this.mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+      if (this.mediaQuery) {
+        var self = this;
+        var onMediaChange = function () {
+          if (self.current === 'auto') self.apply();
+        };
+        if (this.mediaQuery.addEventListener) {
+          this.mediaQuery.addEventListener('change', onMediaChange);
+        } else if (this.mediaQuery.addListener) {
+          this.mediaQuery.addListener(onMediaChange);
+        }
+      }
+      this.current = Store.getTheme() || 'auto';
+      this.apply();
+    },
+
+    isSystemDark: function () {
+      return !!(this.mediaQuery && this.mediaQuery.matches);
+    },
+
+    isDark: function () {
+      if (this.current === 'dark') return true;
+      if (this.current === 'light') return false;
+      return this.isSystemDark();
+    },
+
+    apply: function () {
+      var root = document.documentElement;
+      var dark = this.isDark();
+      root.setAttribute('data-theme', this.current);
+      root.classList.toggle('dark', dark);
+
+      // Meta theme-color 用于 Android 状态栏沉浸适配
+      var metaTheme = $('meta-theme-color');
+      if (metaTheme) {
+        metaTheme.setAttribute('content', dark ? '#000000' : '#007aff');
+      }
+
+      this.updateBtn();
+    },
+
+    updateBtn: function () {
+      var iconEl = $('theme-icon');
+      var labelEl = $('theme-label');
+      var btnEl = $('theme-btn');
+      if (!btnEl) return;
+
+      var info = this.getInfo();
+      if (iconEl) iconEl.textContent = info.icon;
+      if (labelEl) labelEl.textContent = info.label;
+      btnEl.setAttribute('aria-label', '当前外观：' + info.label + '，点击切换');
+    },
+
+    getInfo: function () {
+      if (this.current === 'light') {
+        return { mode: 'light', icon: '☀️', label: '浅色模式' };
+      } else if (this.current === 'dark') {
+        return { mode: 'dark', icon: '🌙', label: '深色模式' };
+      } else {
+        var sysDark = this.isSystemDark();
+        return { mode: 'auto', icon: '🌓', label: sysDark ? '跟随系统(深色)' : '跟随系统' };
+      }
+    },
+
+    cycle: function () {
+      Haptic.play('light');
+      var nextMode;
+      // 循环顺序: 跟随系统 -> 深色模式 -> 浅色模式 -> 跟随系统
+      if (this.current === 'auto') nextMode = 'dark';
+      else if (this.current === 'dark') nextMode = 'light';
+      else nextMode = 'auto';
+
+      this.set(nextMode, true);
+    },
+
+    set: function (mode, showToast) {
+      this.current = mode;
+      Store.setTheme(mode);
+      this.apply();
+      if (showToast) {
+        var info = this.getInfo();
+        Toast.show('外观已设为：' + info.label);
+      }
+    }
+  };
+
+  /* ============================================================
    *  答题卡抽屉
    * ============================================================ */
   var Cards = {
     render: null,
-    open: function (renderFn) {
+    onClear: null,
+    open: function (renderFn, onClearFn) {
       if (renderFn) this.render = renderFn;
+      this.onClear = onClearFn || null;
+      var clearBtn = $('card-clear-btn');
+      if (clearBtn) {
+        clearBtn.style.display = onClearFn ? 'inline-flex' : 'none';
+      }
       if (this.render) this.render($('card-grid'));
       $('card-mask').classList.add('open');
       $('card-drawer').classList.add('open');
     },
+    clearCurrent: function () {
+      if (this.onClear) this.onClear();
+    },
     close: function () {
       $('card-mask').classList.remove('open');
       $('card-drawer').classList.remove('open');
+      this.onClear = null;
     }
   };
 
@@ -433,6 +568,19 @@
       if ($('card-drawer') && $('card-drawer').classList.contains('open')) { Cards.close(); return true; }
       if ($('modal-mask') && $('modal-mask').classList.contains('open')) { Modal.close(); return true; }
       if (this.current === 'exam') { Exam.confirmQuit(); return true; }
+      if (this.current === 'result') {
+        var prevScreen = this.stack.pop();
+        while (prevScreen && (prevScreen === 'result' || prevScreen === 'exam')) {
+          prevScreen = this.stack.pop();
+        }
+        if (prevScreen && prevScreen !== 'home') {
+          this.goto(prevScreen, true);
+          return true;
+        }
+        this.goto('home', true);
+        Home.render();
+        return true;
+      }
       if (window.Practice && Practice._autoNextTimer) {
         clearTimeout(Practice._autoNextTimer);
         Practice._autoNextTimer = null;
@@ -506,6 +654,16 @@
       $('fav-sub').textContent = Store.favIds().length
         ? '已收藏 ' + Store.favIds().length + ' 道题' : '标记重点题目随时复看';
 
+      var prog = Store.getOrderProgress();
+      var orderSub = $('order-sub');
+      if (orderSub) {
+        if (prog > 0) {
+          orderSub.textContent = '上次练至第 ' + (prog + 1) + ' 题 · 自动记忆继续';
+        } else {
+          orderSub.textContent = '按题库顺序逐题作答，答后即时讲解';
+        }
+      }
+
       // 分类
       var byCat = {}, order = DB.meta.cats;
       DB.questions.forEach(function (q) { byCat[q.cat] = (byCat[q.cat] || 0) + 1; });
@@ -518,6 +676,7 @@
           '<span class="arrow">›</span></button>';
       });
       $('cat-list').innerHTML = html;
+      Theme.updateBtn();
     },
 
     startPractice: function (mode, cat) {
@@ -526,7 +685,12 @@
       else ids = DB.questions.filter(function (q) { return !cat || q.cat === cat; })
         .map(function (q) { return q.id; });
       if (!ids.length) { Toast.show('该分类暂无题目'); return; }
-      Practice.begin(ids, mode === 'random' ? '随机练习' : (cat ? cat : '基础练习'), mode, !!cat);
+      var startIdx = 0;
+      if (mode === 'order' && !cat) {
+        startIdx = Store.getOrderProgress();
+        if (startIdx < 0 || startIdx >= ids.length) startIdx = 0;
+      }
+      Practice.begin(ids, mode === 'random' ? '随机练习' : (cat ? cat : '基础练习'), mode, !!cat, false, startIdx);
     },
 
     confirmReset: function () {
@@ -552,6 +716,7 @@
     sessionAnswers: {}, // 当前练习会话的作答状态（退出后清空，重新进入即为崭新未答状态）
     streak: 0, // 连续答对计数器
     _slideDir: null,
+    _lastRenderIdx: -1,
     _autoNextTimer: null,
 
     updateCombo: function (isCorrect) {
@@ -567,16 +732,25 @@
 
       if (this.streak >= 3 && this.type !== 'recite') {
         var desc = '';
+        var isMilestone = (this.streak % 5 === 0);
         if (this.streak >= 15) desc = ' · 考神附体!';
         else if (this.streak >= 10) desc = ' · 势如破竹!';
         else if (this.streak >= 5) desc = ' · 渐入佳境!';
         txt.textContent = '连对 ' + this.streak + ' 题' + desc;
         pill.classList.remove('hidden');
-        pill.classList.remove('pop');
+        pill.classList.remove('pop', 'milestone');
         void pill.offsetWidth;
         pill.classList.add('show', 'pop');
+        if (isMilestone) {
+          pill.classList.add('milestone');
+          Haptic.play('medium');
+          if (window.FX && window.FX.burst) {
+            var rect = pill.getBoundingClientRect();
+            window.FX.burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          }
+        }
       } else {
-        pill.classList.remove('show');
+        pill.classList.remove('show', 'milestone');
         pill.classList.add('hidden');
       }
     },
@@ -586,6 +760,8 @@
       this.type = t;
       this.streak = 0;
       this.updateCombo();
+      var sw = $('practice-mode-switch');
+      if (sw) sw.setAttribute('data-tab', t);
       var btnQ = $('tab-mode-quiz'), btnR = $('tab-mode-recite');
       if (btnQ) btnQ.classList.toggle('active', t === 'quiz');
       if (btnR) btnR.classList.toggle('active', t === 'recite');
@@ -599,11 +775,17 @@
       }
       this.ids = ids;
       this.idx = startIdx || 0;
+      this._lastRenderIdx = -1;
       this.title = title;
       this.mode = mode;
       this.fromCat = !!fromCat;
       this.type = (mode === 'random') ? 'quiz' : (isInspect ? 'recite' : 'quiz');
-      this.sessionAnswers = {}; // 每次进入练习全新重置作答状态
+      // 基础练习（order且非分类）：自动载入已保存答题记录；随机练习/错题本：保持独立
+      if (mode === 'order' && !fromCat) {
+        this.sessionAnswers = Object.assign({}, Store.data.rec || {});
+      } else {
+        this.sessionAnswers = {};
+      }
       this.streak = 0;
       this.updateCombo();
       this._slideDir = null;
@@ -615,6 +797,9 @@
       if (toolbar) {
         toolbar.style.display = showToolbar ? 'flex' : 'none';
       }
+
+      var sw = $('practice-mode-switch');
+      if (sw) sw.setAttribute('data-tab', this.type);
 
       var btnQ = $('tab-mode-quiz'), btnR = $('tab-mode-recite');
       if (btnQ && btnR) {
@@ -640,7 +825,12 @@
       }
       this.streak = 0;
       this.updateCombo();
-      this.sessionAnswers = {}; // 退出后自动清空当前作答状态
+      Cards.close();
+      if (this.mode === 'order' && !this.fromCat) {
+        Store.saveOrderProgress(this.idx);
+      } else {
+        this.sessionAnswers = {};
+      }
       Nav.back();
     },
 
@@ -653,6 +843,8 @@
       var isRecite = (this.type === 'recite');
       var userPick = this.sessionAnswers[q.id];
       var answered = (userPick !== undefined);
+      var isNewQuestion = (this._lastRenderIdx !== this.idx);
+      this._lastRenderIdx = this.idx;
 
       $('p-sub').textContent = (this.idx + 1) + ' / ' + this.ids.length;
       $('p-prev').toggleAttribute('disabled', this.idx === 0);
@@ -674,6 +866,7 @@
       html += '<div class="opts">';
       q.opts.forEach(function (text, i) {
         var cls = 'opt';
+        if (isNewQuestion) cls += ' opt-cascade';
         var key = isJudge ? (i === 0 ? '√' : '×') : LETTERS[i];
         if (isRecite) {
           if (i === q.answer) cls += ' is-correct';
@@ -682,8 +875,10 @@
           if (i === q.answer) cls += ' is-correct';
           else if (i === userPick) cls += ' picked-wrong';
           else cls += ' dim';
+          if (i === userPick) cls += ' shimmer';
         }
-        html += '<button class="' + cls + '"' +
+        var styleAttr = isNewQuestion ? ' style="--opt-i:' + i + '"' : '';
+        html += '<button class="' + cls + '"' + styleAttr +
           ((isRecite || answered) ? ' disabled' : ' onclick="Practice.pick(' + i + ', event)"') + '>' +
           '<span class="key">' + key + '</span>' +
           '<span class="txt">' + esc(text) + '</span></button>';
@@ -734,6 +929,9 @@
 
       this.sessionAnswers[q.id] = i;
       Store.mark(q.id, i); // 持久化答题并更新错题本
+      if (this.mode === 'order' && !this.fromCat) {
+        Store.saveOrderProgress(this.idx);
+      }
       this.render();
 
       var isCorrect = (i === q.answer);
@@ -782,6 +980,9 @@
       }
       this._slideDir = d > 0 ? 'right' : 'left';
       this.idx = n;
+      if (this.mode === 'order' && !this.fromCat) {
+        Store.saveOrderProgress(this.idx);
+      }
       this.render();
     },
 
@@ -814,6 +1015,7 @@
 
     openCard: function () {
       var self = this;
+      var canClear = (this.mode === 'order' && !this.fromCat);
       Cards.open(function (grid) {
         var h = '';
         self.ids.forEach(function (id, i) {
@@ -831,7 +1033,24 @@
           h += '<button class="' + cls.trim() + '" onclick="Practice.jump(' + i + ')">' + (i + 1) + '</button>';
         });
         grid.innerHTML = h;
-      });
+      }, canClear ? function () {
+        Modal.ask('清理答题记录', '确定要清理基础练习的答题记录并从第 1 题重新开始吗？', '确认清理', function () {
+          self.clearRecords();
+        });
+      } : null);
+    },
+
+    clearRecords: function () {
+      Store.clearOrderRecords();
+      this.sessionAnswers = {};
+      this.streak = 0;
+      this.updateCombo();
+      this.idx = 0;
+      this._lastRenderIdx = -1;
+      this._slideDir = null;
+      Cards.close();
+      this.render();
+      Toast.show('已清理答题记录，从第 1 题重新开始');
     },
 
     jump: function (i) {
@@ -841,6 +1060,9 @@
       }
       this._slideDir = null;
       this.idx = i;
+      if (this.mode === 'order' && !this.fromCat) {
+        Store.saveOrderProgress(this.idx);
+      }
       Cards.close();
       this.render();
     }
@@ -989,7 +1211,7 @@
             '</div>' +
             '<span class="tag ' + (pass ? 'ok">及格' : 'err">不及格') + '</span>' +
           '</div>' +
-          '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--brand)">' +
+          '<div style="margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--brand);font-weight:500">' +
             '<span>' + (e.bad ? '⚠️ 包含 ' + e.bad + ' 道错题待复盘' : '✨ 全部答对，表现优秀') + '</span>' +
             '<span>查看答卷详情与错题 →</span>' +
           '</div>' +
@@ -1042,6 +1264,7 @@
         };
       });
       this.idx = 0;
+      this._lastRenderIdx = -1;
       this.picks = {};
       this.total = ids.length;
       this.remain = seconds;
@@ -1076,6 +1299,8 @@
       var isJudge = q.type === 'judge';
       var picked = this.picks[this.idx];
       var isLast = (this.idx === this.total - 1);
+      var isNewQuestion = (this._lastRenderIdx !== this.idx);
+      this._lastRenderIdx = this.idx;
 
       $('e-sub').textContent = (this.idx + 1) + ' / ' + this.total;
       $('e-prev').toggleAttribute('disabled', this.idx === 0);
@@ -1098,9 +1323,11 @@
         '<span class="tag gray">' + esc(q.cat) + '</span></div>';
       html += '<div class="stem">' + esc(q.stem) + '</div><div class="opts">';
       p.opts.forEach(function (text, i) {
-        var cls = 'opt' + (picked === i ? ' picked' : '');
+        var cls = 'opt' + (picked === i ? ' picked shimmer' : '');
+        if (isNewQuestion) cls += ' opt-cascade';
         var key = isJudge ? (i === 0 ? '√' : '×') : LETTERS[i];
-        html += '<button class="' + cls + '" onclick="Exam.pick(' + i + ')">' +
+        var styleAttr = isNewQuestion ? ' style="--opt-i:' + i + '"' : '';
+        html += '<button class="' + cls + '"' + styleAttr + ' onclick="Exam.pick(' + i + ')">' +
           '<span class="key">' + key + '</span><span class="txt">' + esc(text) + '</span></button>';
       });
       html += '</div>';
@@ -1224,15 +1451,15 @@
       paper.forEach(function (p, i) { if (picks[i] === undefined) blank++; });
 
       var html = '<div class="result-hero ' + cls + '">' +
-        '<div class="score">' + rec.score + '<small> 分</small></div>' +
+        '<div class="score"><span id="anim-score">' + (isFreshSubmit ? '0' : rec.score) + '</span><small> 分</small></div>' +
         '<div class="verdict-txt">' + (pass ? (rec.score >= 85 ? '成绩优秀，继续保持' : '恭喜通过') : '未达及格线') + '</div>' +
         '<div class="sub">' + esc(rec.date) + (timeout ? ' · 计时结束自动交卷' : '') + '</div>' +
       '</div>';
 
       html += '<div class="wrap" style="margin-top:-24px;position:relative;z-index:2">' +
         '<div class="kv-grid">' +
-          '<div><b style="color:var(--ok)">' + rec.ok + '</b><span>答对</span></div>' +
-          '<div><b style="color:var(--err)">' + rec.bad + '</b><span>答错</span></div>' +
+          '<div><b style="color:var(--ok)"><span id="anim-ok">' + (isFreshSubmit ? '0' : rec.ok) + '</span></b><span>答对</span></div>' +
+          '<div><b style="color:var(--err)"><span id="anim-bad">' + (isFreshSubmit ? '0' : rec.bad) + '</span></b><span>答错</span></div>' +
           '<div><b>' + fmtDur(rec.used) + '</b><span>用时</span></div>' +
         '</div>';
 
@@ -1259,6 +1486,32 @@
       this._paper = paper;
       this._picks = picks;
       Nav.goto('result');
+      if (isFreshSubmit) {
+        Nav.stack = Nav.stack.filter(function (s) { return s !== 'exam' && s !== 'result'; });
+      }
+
+      if (isFreshSubmit) {
+        var startT = performance.now();
+        var dur = 750;
+        var targetScore = rec.score;
+        var targetOk = rec.ok;
+        var targetBad = rec.bad;
+        var elScore = $('anim-score');
+        var elOk = $('anim-ok');
+        var elBad = $('anim-bad');
+
+        function rollStep(now) {
+          var progress = Math.min((now - startT) / dur, 1);
+          var ease = 1 - Math.pow(1 - progress, 3);
+          if (elScore) elScore.textContent = Math.round(targetScore * ease);
+          if (elOk) elOk.textContent = Math.round(targetOk * ease);
+          if (elBad) elBad.textContent = Math.round(targetBad * ease);
+          if (progress < 1) {
+            requestAnimationFrame(rollStep);
+          }
+        }
+        requestAnimationFrame(rollStep);
+      }
 
       if (isFreshSubmit && pass) {
         Haptic.play('success');
@@ -1687,6 +1940,7 @@
     DB = window.QBANK;
     DB.questions.forEach(function (q) { BY_ID[q.id] = q; });
     Store.load();
+    Theme.init();
 
     // 事件绑定
     $('modal-ok').addEventListener('click', function () {
@@ -1742,6 +1996,7 @@
   window.Toast = Toast;
   window.Nav = Nav;
   window.Store = Store;
+  window.Theme = Theme;
   window.AccessControl = AccessControl;
   window.Haptic = Haptic;
   window.FX = FX;
