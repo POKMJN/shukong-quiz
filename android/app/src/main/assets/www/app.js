@@ -48,6 +48,67 @@
   var LETTERS = ['A', 'B', 'C', 'D'];
 
   /* ============================================================
+   *  题干括号与答案填空动态格式化
+   * ============================================================ */
+  function formatStem(stem, opts, answerIdx, pickIdx, isRecite, answered, isExam) {
+    if (!stem) return '';
+    var bracketRe = /[（(][\s_]*[)）]/g;
+    var matches = stem.match(bracketRe);
+    if (!matches) {
+      return esc(stem);
+    }
+
+    var isFilled = false;
+    var letter = '';
+    var text = '';
+
+    if (isExam) {
+      if (pickIdx !== undefined && pickIdx !== null && pickIdx >= 0 && opts && opts[pickIdx] !== undefined) {
+        isFilled = true;
+        letter = LETTERS[pickIdx] || '';
+        text = opts[pickIdx];
+      }
+    } else if (isRecite || answered) {
+      if (answerIdx !== undefined && answerIdx !== null && answerIdx >= 0 && opts && opts[answerIdx] !== undefined) {
+        isFilled = true;
+        letter = LETTERS[answerIdx] || '';
+        text = opts[answerIdx];
+      }
+    }
+
+    var parts = stem.split(bracketRe);
+    if (!isFilled) {
+      var blankHtml = '<span class="stem-bracket blank">（&nbsp;&nbsp;&nbsp;&nbsp;）</span>';
+      return parts.map(esc).join(blankHtml);
+    }
+
+    var cls = isExam ? 'stem-bracket filled cur' : 'stem-bracket filled ok';
+
+    // 多空特殊处理 (若答案含有逗号且有多空，如第54题)
+    if (matches.length > 1 && (text.indexOf('，') !== -1 || text.indexOf(',') !== -1)) {
+      var subs = text.indexOf('，') !== -1 ? text.split('，') : text.split(',');
+      var res = '';
+      for (var i = 0; i < parts.length; i++) {
+        res += esc(parts[i]);
+        if (i < matches.length) {
+          var subText = subs[i] !== undefined ? subs[i] : text;
+          var subLetter = (i === 0 && letter) ? '<b class="bracket-letter">' + letter + '</b> · ' : '';
+          res += '<span class="' + cls + '">（' + subLetter + '<span class="bracket-text">' + esc(subText) + '</span>）</span>';
+        }
+      }
+      return res;
+    }
+
+    // 单空标准填充：包含选项字母与选项文本
+    var contentHtml = '<b class="bracket-letter">' + letter + '</b>';
+    if (text) {
+      contentHtml += '<span class="bracket-text"> · ' + esc(text) + '</span>';
+    }
+    var filledHtml = '<span class="' + cls + '">（' + contentHtml + '）</span>';
+    return parts.map(esc).join(filledHtml);
+  }
+
+  /* ============================================================
    *  触感反馈 (Haptic Vibration)
    * ============================================================ */
   var Haptic = {
@@ -862,7 +923,7 @@
       }
       html += '</div>';
 
-      html += '<div class="stem">' + esc(q.stem) + '</div>';
+      html += '<div class="stem">' + formatStem(q.stem, q.opts, q.answer, userPick, isRecite, answered, false) + '</div>';
       html += '<div class="opts">';
       q.opts.forEach(function (text, i) {
         var cls = 'opt';
@@ -1321,7 +1382,7 @@
       var html = '<div class="qhead">' +
         '<span class="tag">' + (isJudge ? '判断题' : '单选题') + '</span>' +
         '<span class="tag gray">' + esc(q.cat) + '</span></div>';
-      html += '<div class="stem">' + esc(q.stem) + '</div><div class="opts">';
+      html += '<div class="stem">' + formatStem(q.stem, p.opts, p.answer, picked, false, false, true) + '</div><div class="opts">';
       p.opts.forEach(function (text, i) {
         var cls = 'opt' + (picked === i ? ' picked shimmer' : '');
         if (isNewQuestion) cls += ' opt-cascade';
@@ -1592,7 +1653,7 @@
         var q = BY_ID[id];
         if (!q) return;
         html += '<button class="list-item" onclick="List.view(' + id + ')">' +
-          '<div class="li-stem">' + esc(q.stem) + '</div>' +
+          '<div class="li-stem">' + formatStem(q.stem, q.opts, q.answer, undefined, false, false, false) + '</div>' +
           '<div class="li-meta">' +
             '<span class="tag">' + (q.type === 'judge' ? '判断' : '单选') + '</span>' +
             '<span>' + esc(q.cat) + '</span>' +

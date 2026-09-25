@@ -414,6 +414,72 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   letter-spacing: -0.2px;
 }
 
+/* ---------- 题干括号与答案动态填空 ---------- */
+.stem-bracket {
+  display: inline-block;
+  vertical-align: baseline;
+  box-sizing: border-box;
+  margin: 0 4px;
+  border-radius: 8px;
+  font-size: 0.94em;
+  line-height: 1.45;
+  word-break: break-word;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 未作答时的留白占位 */
+.stem-bracket.blank {
+  color: var(--brand);
+  background: rgba(0, 122, 255, 0.08);
+  border: 1px dashed rgba(0, 122, 255, 0.45);
+  padding: 1px 7px;
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+
+/* 考试作答中已选（蓝色高亮） */
+.stem-bracket.filled.cur {
+  color: #0066d6;
+  background: rgba(0, 122, 255, 0.12);
+  border: 1px solid rgba(0, 122, 255, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 122, 255, 0.1);
+  padding: 1px 8px;
+  font-weight: 600;
+  animation: bracketPop 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 练习回答后或背题模式填充标准答案（绿色高亮，清晰醒目） */
+.stem-bracket.filled.ok {
+  color: #0f8544;
+  background: rgba(52, 199, 89, 0.14);
+  border: 1px solid rgba(52, 199, 89, 0.38);
+  box-shadow: 0 1px 4px rgba(52, 199, 89, 0.12);
+  padding: 1px 8px;
+  font-weight: 600;
+  animation: bracketPop 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.stem-bracket .bracket-letter {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.stem-bracket .bracket-text {
+  font-weight: 600;
+}
+
+.list-item .li-stem .stem-bracket {
+  font-size: 12.5px;
+  padding: 0 4px;
+  margin: 0 2px;
+}
+
+@keyframes bracketPop {
+  0% { transform: scale(0.92); opacity: 0.6; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- 选项卡片 (晶莹毛玻璃药丸) ---------- */
 .opts { display: flex; flex-direction: column; gap: 11px; padding-bottom: 20px; }
 
@@ -1500,4 +1566,22 @@ html.dark .remove-wrong-btn:active {
 }
 html.dark #loading {
   background: rgba(0, 0, 0, 0.88);
+}
+
+html.dark .stem-bracket.blank {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+html.dark .stem-bracket.filled.cur {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+html.dark .stem-bracket.filled.ok {
+  color: #4ade80;
+  background: rgba(52, 199, 89, 0.18);
+  border-color: rgba(74, 222, 128, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }

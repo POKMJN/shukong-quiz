@@ -115,17 +115,37 @@ def parse(lines):
 
     # 答案字母：先看括号，再看 答案:X 行，最后看句尾粘着的裸字母
     bracketed = [m.group(1).upper() for m in BRACKET.finditer(stem)]
-    stem = BRACKET.sub('', stem).strip()
+    stem = BRACKET.sub('（ ）', stem).strip()
+
+    # 处理未闭合的括号尾巴（如：...误差（B）
+    m_unclosed = re.search(r'[（(]\s*([A-Da-d])\s*$', stem)
+    if m_unclosed:
+        bracketed.append(m_unclosed.group(1).upper())
+        stem = stem[:m_unclosed.start()].strip() + '（ ）'
+
     if not bracketed and not ans_marks and not tf:
         g = re.search(r'[\u4e00-\u9fff。，、；：？！)）:?!"”]\s*([A-D])\s*[。.．]?\s*$', stem)
         if g:
             bracketed.append(g.group(1))
             stem = stem[:g.start(1)].strip()
+            if '（ ）' not in stem and '()' not in stem and '（）' not in stem:
+                stem += '（ ）'
+
     if not bracketed and not ans_marks and not tf:
         g = re.search(r'[（(]\s*([A-Da-d])\s*[)）]?\s*[。.．]?\s*$', stem)
         if g:
             bracketed.append(g.group(1).upper())
             stem = stem[:g.start()].strip()
+            if '（ ）' not in stem and '()' not in stem and '（）' not in stem:
+                stem += '（ ）'
+
+    # 规范化题干中的空括号统一为中文全角「（ ）」
+    stem = re.sub(r'[（(]\s*[)）]', '（ ）', stem)
+
+    # 针对选择题，若题干仍缺失括号，在末尾补充「（ ）」
+    if tf is None and opts:
+        if '（ ）' not in stem:
+            stem += '（ ）'
 
     letter = ans_marks[-1] if ans_marks else (bracketed[-1] if bracketed else None)
     # 对源文档中个别漏标答案字母的题目补充对应标准考题答案，确保可正常作答
