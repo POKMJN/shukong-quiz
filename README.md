@@ -15,7 +15,7 @@
 
 ## 下载安装
 
-到 [**Releases**](../../releases/latest) 页下载 `数控车工刷题-v1.2.apk`，传到手机点击安装，
+到 [**Releases**](../../releases/latest) 页下载 `数控车工刷题-v1.0.apk`，传到手机点击安装，
 按提示允许「安装未知来源应用」即可。支持 Android 5.0（API 21）及以上。
 
 ## 功能
